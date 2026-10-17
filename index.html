@@ -235,6 +235,13 @@
     background: #eef2f6; border: 1px solid var(--border);
     padding: 1px 7px; border-radius: 9px; vertical-align: 2px; white-space: nowrap;
   }
+  .upd-badge {
+    display: inline-block; background: #1a5fb4; color: #fff;
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9px;
+    margin-left: 4px; vertical-align: 2px; white-space: nowrap; cursor: pointer;
+    animation: upd-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes upd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
   /* ---------- Бар выполнения ---------- */
   #pbar {
     position: fixed; top: 0; left: 0; right: 0; height: 4px;
@@ -2766,7 +2773,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
@@ -2791,6 +2798,22 @@ function updateAppFlow() {
 $('#cmdUpdateApp').onclick = updateAppFlow;
 // автопроверка при запуске: сверяем свою версию с версией на сайте
 // (version.json service worker не кэширует — всегда свежая)
+function showUpdateBadge(newVer) {
+  $('#appVerHeader').innerHTML = 'v' + APP_VERSION +
+    ' <span class="upd-badge" title="Нажмите, чтобы обновить">⬆ ' + newVer + '</span>';
+  $('#appVerHeader').style.cursor = 'pointer';
+  $('#appVerHeader').onclick = () => offerUpdate(newVer);
+  $('#appVersion').innerHTML = 'версия: ' + APP_VERSION +
+    ' · <b style="color:#1a5fb4">⬆ доступно ' + newVer + ' — нажмите, чтобы обновить</b>';
+  $('#appVersion').style.cursor = 'pointer';
+  $('#appVersion').onclick = () => offerUpdate(newVer);
+}
+async function offerUpdate(newVer) {
+  const go = await dlg('Доступно обновление ' + newVer,
+    'У вас установлена версия ' + APP_VERSION + ', на сайте — ' + newVer + '.\n\nОбновить сейчас? Данные на телефоне не пострадают.',
+    '🔄 Обновить');
+  if (go) updateAppFlow();
+}
 async function checkForUpdate() {
   try {
     if (!navigator.onLine) return;
@@ -2798,10 +2821,8 @@ async function checkForUpdate() {
     if (!r.ok) return;
     const j = await r.json();
     if (j && j.version && j.version !== APP_VERSION) {
-      const go = await dlg('Доступно обновление ' + j.version,
-        'У вас установлена версия ' + APP_VERSION + ', на сайте — ' + j.version + '.\n\nОбновить сейчас? Данные на телефоне не пострадают.',
-        '🔄 Обновить');
-      if (go) updateAppFlow();
+      showUpdateBadge(j.version);
+      offerUpdate(j.version);
     }
   } catch (e) { /* нет сети — молча пропустить */ }
 }
