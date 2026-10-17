@@ -87,8 +87,21 @@
   .field input.wide { width: 260px; }
   /* ---------- единый стиль таблиц ---------- */
   table { border-collapse: collapse; width: 100%; user-select: text; }
+  .table-wrap { --tbl-zoom: 1; }
   table:not(.xl-params-table) th,
-  table:not(.xl-params-table) td { border: 1px solid #b7b7b7; padding: 5px 9px; font-size: 12.5px; }
+  table:not(.xl-params-table) td { border: 1px solid #b7b7b7; padding: 5px 9px; font-size: calc(12.5px * var(--tbl-zoom, 1)); }
+  /* масштаб таблицы: кнопки −/＋ над таблицей */
+  .zoom-bar {
+    display: flex; gap: 6px; align-items: center; margin: 2px 0 6px;
+  }
+  .zoom-bar button {
+    font: inherit; font-size: 15px; line-height: 1;
+    min-width: 34px; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer;
+  }
+  .zoom-bar button:active { background: #eef2f6; }
+  .zoom-bar .zval { font-size: 11px; color: var(--muted); min-width: 40px; text-align: center; }
+  .zoom-bar .zlbl { font-size: 10.5px; color: var(--muted); }
   table:not(.xl-params-table) thead th {
     background: #92d050; color: #1f4e79; font-weight: 700;
     border-color: #76b02e; position: sticky; top: 0; white-space: nowrap; text-align: left;
@@ -1721,7 +1734,7 @@ function loadErrors() {
     box.innerHTML = '<div class="hint" style="margin-top:10px">✓ Проблем сопоставления не найдено — все сотрудники из «Статистики» разобраны.</div>';
     return;
   }
-  let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px">';
+  let html = '<table style="width:100%; border-collapse:collapse">';
   html += '<tr style="text-align:left"><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Сотрудник</th><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Стр.</th><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Проблема</th></tr>';
   for (const e of errs) {
     html += '<tr>' +
@@ -2735,7 +2748,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
@@ -2775,6 +2788,37 @@ async function checkForUpdate() {
   } catch (e) { /* нет сети — молча пропустить */ }
 }
 setTimeout(checkForUpdate, 2500);
+
+// ==================== МАСШТАБ ТАБЛИЦ ====================
+// кнопки −/＋ над каждой таблицей: размер шрифта 50–220%, запоминается по вкладке
+const ZKEY = 'shablon-zoom-v1';
+let zooms = {};
+try { zooms = JSON.parse(localStorage.getItem(ZKEY) || '{}'); } catch (e) { zooms = {}; }
+document.querySelectorAll('main .table-wrap').forEach((wrap, i) => {
+  const sec = (wrap.closest('section') && wrap.closest('section').id) || 'tw' + i;
+  const bar = document.createElement('div');
+  bar.className = 'zoom-bar';
+  bar.innerHTML = '<button type="button" data-d="-1" aria-label="Уменьшить">−</button>' +
+    '<span class="zval"></span>' +
+    '<button type="button" data-d="1" aria-label="Увеличить">＋</button>' +
+    '<span class="zlbl">масштаб таблицы</span>';
+  wrap.before(bar);
+  const apply = () => {
+    const z = zooms[sec] ?? 100;
+    wrap.style.setProperty('--tbl-zoom', z / 100);
+    bar.querySelector('.zval').textContent = z + '%';
+  };
+  bar.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      let z = zooms[sec] ?? 100;
+      z = Math.min(220, Math.max(50, z + (+b.dataset.d) * 15));
+      zooms[sec] = z;
+      localStorage.setItem(ZKEY, JSON.stringify(zooms));
+      apply();
+    };
+  });
+  apply();
+});
 
 // ==================== СТАРТ ====================
 // при каждом запуске — дата по умолчанию = вчера (как в настольной версии)
