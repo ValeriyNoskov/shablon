@@ -759,6 +759,7 @@
   <div class="modal" style="width:440px">
     <h3 id="dlgTitle">Подтверждение</h3>
     <p id="dlgMsg" style="white-space:pre-line;line-height:1.5"></p>
+    <input id="dlgInput" type="text" style="display:none; width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:15px; margin-bottom:10px">
     <div class="actions">
       <button class="btn" id="dlgCancel">Отмена</button>
       <button class="btn primary" id="dlgOk">ОК</button>
@@ -803,22 +804,34 @@ function persist() {
 // ==================== ДИАЛОГИ (alert не работает в WKWebView/standalone) ====================
 window.alert = msg => dlg('Уведомление', String(msg));
 function dlg(title, msg, okText, cancelText) {
+  return dlgBase(title, msg, okText, cancelText, undefined);
+}
+// диалог с полем ввода: resolve(строка) при ОК, null при отмене
+function dlgText(title, msg, value, okText) {
+  return dlgBase(title, msg, okText || 'ОК', 'Отмена', value ?? '');
+}
+function dlgBase(title, msg, okText, cancelText, inputValue) {
   return new Promise(resolve => {
     $('#dlgTitle').textContent = title;
     $('#dlgMsg').textContent = msg;
     $('#dlgOk').textContent = okText || 'ОК';
     const m = $('#dlgModal');
     const cancelBtn = $('#dlgCancel');
+    const inp = $('#dlgInput');
+    const withInput = inputValue !== undefined;
+    inp.style.display = withInput ? '' : 'none';
+    inp.value = withInput ? inputValue : '';
     cancelBtn.style.display = cancelText === null ? 'none' : '';
     cancelBtn.textContent = cancelText || 'Отмена';
     m.classList.add('show');
     const done = v => {
       m.classList.remove('show');
       $('#dlgOk').onclick = $('#dlgCancel').onclick = null;
-      resolve(v);
+      resolve(withInput && v !== false ? inp.value.trim() : v);
     };
     $('#dlgOk').onclick = () => done(true);
     cancelBtn.onclick = () => done(false);
+    if (withInput) setTimeout(() => inp.focus(), 100);
   });
 }
 
@@ -2709,6 +2722,82 @@ function companyMatch(name, company) {
   });
 }
 
+// ---------- подсказка «похоже на компанию» ----------
+// Перед отчётом: сотрудники, не попавшие ни в одну книгу компании.
+// Если у нескольких из них повторяется одно слово («Мезонин», «ПРОФ…») —
+// предлагаем добавить новую компанию или отнести к действующей.
+// Отклонённые слова запоминаются и больше не предлагаются.
+function unassignedByCompany(emps) {
+  return emps.filter(e => !companiesList().some(c => companyMatch(e.fio, c)));
+}
+function companyCandidates(emps) {
+  const freq = new Map();
+  for (const e of unassignedByCompany(emps)) {
+    const words = new Set(String(e.fio ?? '').toUpperCase().replace(/Ё/g, 'Е')
+      .replace(/[^А-ЯA-Z ]/g, ' ').split(/\s+/)
+      .filter(w => w.length >= 4 && !/\d/.test(w)));
+    for (const w of words) freq.set(w, (freq.get(w) || 0) + 1);
+  }
+  return [...freq.entries()].filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1]).map(([w, n]) => ({ word: w, count: n }));
+}
+async function suggestCompanies(emps) {
+  const ignored = new Set(Array.isArray(db.settings.companyIgnored) ? db.settings.companyIgnored : []);
+  const known = companiesList().map(k => k.toUpperCase().replace(/Ё/g, 'Е'));
+  const cands = companyCandidates(emps).filter(c =>
+    !ignored.has(c.word) && !known.includes(c.word) &&
+    !known.some(k => k.includes(c.word)));
+  const listNames = empsW => empsW.slice(0, 5).map(e => '• ' + e.fio).join('\n') + (empsW.length > 5 ? '\n… и ещё ' + (empsW.length - 5) : '');
+  for (const cand of cands.slice(0, 2)) {
+    const empsW = unassignedByCompany(emps).filter(e => String(e.fio).toUpperCase().replace(/Ё/g, 'Е').includes(cand.word));
+    if (!empsW.length) continue;
+    // слово похоже на действующую компанию (например «ПРОФ» → «ПРОФСЕРВИС»)?
+    const like = companiesList().find(k => {
+      const K = k.toUpperCase().replace(/Ё/g, 'Е');
+      return K.startsWith(cand.word) && K !== cand.word;
+    });
+    if (like) {
+      const ok = await dlg('Похоже на компанию «' + like + '»',
+        'Сотрудники со словом «' + cand.word + '» не попали ни в одну книгу:\n\n' + listNames(empsW) +
+        '\n\nОтнести их к действующей компании «' + like + '»?', 'Отнести к ' + like);
+      if (ok) {
+        db.settings.companyRules = db.settings.companyRules || {};
+        db.settings.companyRules[like] = (db.settings.companyRules[like] ? db.settings.companyRules[like] + ', ' : '') + cand.word;
+        persist(); renderCompaniesChips();
+        toast(like + ' = ' + db.settings.companyRules[like]);
+      } else ignored.add(cand.word);
+    } else {
+      const ok = await dlg('Новая компания «' + cand.word + '»?',
+        'Слово «' + cand.word + '» встречается у ' + cand.count + ' сотрудник(ов), не попавших ни в одну книгу:\n\n' + listNames(empsW) +
+        '\n\nДобавить «' + cand.word + '» отдельной компанией?\n(появится книга «Баллы (' + cand.word + ').xlsx»)', '➕ Добавить');
+      if (ok) {
+        db.settings.companies = companiesList().concat([cand.word]);
+        persist(); renderCompaniesChips();
+        toast('Добавлена компания: ' + cand.word);
+      } else {
+        const to = await dlgText('К действующей компании?',
+          'Отнести сотрудников со словом «' + cand.word + '» к действующей компании?\n\n' +
+          'Действующие: ' + companiesList().join(', ') +
+          '\n\nВпишите название (или оставьте пустым — пропустить):');
+        const match = to && companiesList().find(k => k.toUpperCase() === to.toUpperCase());
+        if (match) {
+          db.settings.companyRules = db.settings.companyRules || {};
+          db.settings.companyRules[match] = (db.settings.companyRules[match] ? db.settings.companyRules[match] + ', ' : '') + cand.word;
+          persist(); renderCompaniesChips();
+          toast(match + ' = ' + db.settings.companyRules[match]);
+        } else {
+          if (to) toast('Компании «' + to + '» нет в списке — пропущено');
+          ignored.add(cand.word);
+        }
+      }
+    }
+  }
+  if (db.settings.companyIgnored?.length !== [...ignored].length || [...ignored].some(w => !db.settings.companyIgnored.includes(w))) {
+    db.settings.companyIgnored = [...ignored];
+    persist();
+  }
+}
+
 async function saveReport() {
   if (typeof ExcelJS === 'undefined') {
     alert('Библиотека Excel ещё не загружена.\nПодключитесь к интернету один раз и подождите пару секунд.');
@@ -2716,6 +2805,8 @@ async function saveReport() {
   }
   const date = db.settings.date || 'отчет';
   const emps = [...db.employees].sort((a, b) => numVal(b.total) - numVal(a.total));
+  // если есть сотрудники вне всех компаний с похожими словами — предложим распределить
+  try { await suggestCompanies(emps); } catch (e) {}
   // цвета категорий — как в Excel-версии и как на экране
   const CAT_FILL = {
     'АУТСОРС':    { argb: 'FF00B0F0' },  // голубой
@@ -2981,7 +3072,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.5';
+const APP_VERSION = '3.6';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
