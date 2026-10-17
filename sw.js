@@ -42,6 +42,8 @@ self.addEventListener('message', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  // version.json — всегда из сети: по нему приложение узнаёт о выходе обновления
+  if (new URL(e.request.url).pathname.endsWith('version.json')) return;
   e.respondWith(
     caches.match(e.request).then(hit => {
       if (hit) {

@@ -236,29 +236,61 @@
     box-shadow: 0 2px 8px rgba(26,95,180,.15);
   }
   .table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; }
+  /* ---------- Кнопка меню (шторка) ---------- */
+  #btnMenu { display: none; }
+  #navOverlay { display: none; }
   /* ---------- Мобильная раскладка (iPhone) ---------- */
   @media (max-width: 720px) {
-    body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
-    nav {
-      flex-direction: row; overflow-x: auto; overflow-y: hidden;
-      padding: 6px; gap: 6px; border-right: none;
-      border-bottom: 1px solid var(--border);
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    header {
+      position: sticky; top: 0; z-index: 90;
+      padding-top: calc(8px + env(safe-area-inset-top));
     }
-    nav button { width: auto; flex: none; padding: 8px 12px; }
-    nav button.alert { box-shadow: inset 0 3px 0 #e74c3c; }
-    nav button.active { box-shadow: inset 0 3px 0 var(--accent); }
+    #btnMenu {
+      display: inline-flex; align-items: center; justify-content: center;
+      font: inherit; font-size: 22px; line-height: 1;
+      padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+      background: #fff; cursor: pointer;
+    }
+    /* шторка слева */
+    nav {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 300px; max-width: 84vw;
+      flex-direction: column; overflow-y: auto;
+      padding: calc(14px + env(safe-area-inset-top)) 10px calc(14px + env(safe-area-inset-bottom));
+      gap: 4px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      box-shadow: 4px 0 24px rgba(0,0,0,.25);
+      transform: translateX(-105%);
+      transition: transform .25s ease;
+      z-index: 120;
+    }
+    nav.open { transform: none; }
+    nav button {
+      width: 100%; flex: none; padding: 14px 16px;
+      font-size: 15px; text-align: left; border-radius: 10px;
+    }
+    nav button.active { box-shadow: inset 4px 0 0 var(--accent); background: #eaf1fb; font-weight: 700; }
+    #navOverlay {
+      display: block; position: fixed; inset: 0;
+      background: rgba(10,20,40,.45); z-index: 110;
+      opacity: 0; pointer-events: none; transition: opacity .25s;
+    }
+    #navOverlay.show { opacity: 1; pointer-events: auto; }
     main { grid-column: 1; padding: 8px; }
-    header { padding: 8px 12px; gap: 8px; }
     header h1 { font-size: 14px; }
     header .file { display: none; }
     .actions { grid-template-columns: 1fr 1fr; }
     .table-wrap { margin: 0 -4px; }
+    nav button.alert { box-shadow: inset 4px 0 0 #e74c3c; }
   }
 </style>
 </head>
 <body>
 
 <header>
+  <button id="btnMenu" aria-label="Меню">☰</button>
   <h1>📋 Шаблон выгрузки</h1>
   <span class="file" id="fileLabel"></span>
   <span class="save-dot" id="saveDot" title="Сохранено в память iPhone"></span>
@@ -271,9 +303,12 @@
   <button data-tab="stats">Статистика</button>
   <button data-tab="solution">Решение</button>
   <button data-tab="staff">Стаж (справочник)</button>
+  <button data-tab="errors" id="navErrors">⚠ Ошибки</button>
   <button data-tab="settings">⚙ Настройка</button>
   <button data-tab="checks" id="navChecks">🧪 Проверка</button>
 </nav>
+
+<div id="navOverlay"></div>
 
 <main>
   <!-- ======= Вкладка Программа ======= -->
@@ -334,6 +369,21 @@
         </table>
       </div>
       <div class="hint">Норма в смену считается сама (норма в час × часы). Дата влияет на расчёт стажа и авто-категории.</div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Ошибки ======= -->
+  <section id="tab-errors" style="display:none">
+    <div class="panel">
+      <h2>⚠ Ошибки сопоставления</h2>
+      <div class="toolbar">
+        <span class="count" id="errCount"></span>
+      </div>
+      <div class="table-wrap" id="errorsList"></div>
+      <div class="hint">
+        Сотрудники из «Статистики», у которых соответствие в «Баллах»/«Стаже» не найдено,
+        найдено только по фамилии или неоднозначно. Пересчитывается при каждом открытии вкладки.
+      </div>
     </div>
   </section>
 
@@ -767,19 +817,27 @@ function tabDigits(s) {
 
 // normalizeFIO — латинские буквы -> похожие кириллические, служебные слова — долой
 const LATIN_CYR = { 'c':'с','a':'а','e':'е','o':'о','p':'р','x':'х','y':'у','k':'к','m':'м','t':'т','b':'в','h':'н','3':'з','0':'о' };
+// мусорные куски имён — как в VBA (лист «Настройки», столбец D): вырезаются как подстроки
+const SUBSTR_JUNK = ['ас_профсервис_', 'ас_ресурс_', 'ас_эни_', 'подбор штучки', 'ас_про', 'ас__'];
+// слова-не-имена для КЛЮЧА сопоставления (в ключе компании тоже лишние)
+const KEY_STOP = new Set(['ас', 'профсервис', 'ресурс', 'про', 'эни', 'энисервис', 'аутсорс', 'нс', 'аутсорсинг']);
 function normalizeFIO(s) {
   let t = String(s ?? '').toLowerCase().trim();
   t = t.replace(/[caeopxykmtbh30]/g, ch => LATIN_CYR[ch] || ch);
+  for (const j of SUBSTR_JUNK) t = t.split(j).join(' ');
   t = t.replace(/[ё_.,\-]/g, ' ');
-  const stop = new Set(['ас', 'профсервис', 'ресурс', 'аутсорс', 'нс', 'аутсорсинг']);
-  return t.split(/\s+/).filter(w => w && !stop.has(w)).join(' ');
+  return t.split(/\s+/).filter(w => w && !KEY_STOP.has(w)).join(' ');
 }
 
-// cleanName — имя без служебных дополнений (с сохранением регистра)
+// cleanName — имя для показа: мусорные префиксы долой,
+// но КОМПАНИИ сохраняем («Диева Юлия ПРОФСЕРВИС») — по ним строятся листы отчёта
+const SHOW_STOP = new Set(['ас', 'эни', 'аутсорс', 'нс', 'аутсорсинг']);
 function cleanName(s) {
-  const words = String(s ?? '').replace(/[_.,"]/g, ' ').split(/\s+/);
-  const stop = new Set(['ас', 'профсервис', 'ресурс', 'аутсорс', 'нс', 'аутсорсинг']);
-  return words.filter(w => w && !stop.has(w.toLowerCase())).join(' ');
+  let t = String(s ?? '');
+  const junkRe = [/АС_ПРОФСЕРВИС_/gi, /АС_РЕСУРС_/gi, /АС_ЭНИ_/gi, /АС__/gi, /ПОДБОР\s+ШТУЧКИ/gi, /АС_ПРО/gi];
+  for (const re of junkRe) t = t.replace(re, ' ');
+  const words = t.replace(/[_.,"]/g, ' ').split(/\s+/);
+  return words.filter(w => w && !SHOW_STOP.has(w.toLowerCase())).join(' ');
 }
 
 // lev — расстояние Левенштейна
@@ -814,18 +872,26 @@ function wordEq(a, b) {
   return false;
 }
 
-// fioMatch — нечёткое сопоставление ФИО (фамилия обязана совпасть)
+// fioMatch — сопоставление ФИО по правилам VBA (ИменаСовпали):
+//   • точное равенство ключей — совпадение;
+//   • однословная запись (только фамилия) с другим написанием НЕ совпадает:
+//     «Кузнецова» — не «Кузнецова Яна» и не «Кузнецова Арина»;
+//   • многословные: слова сравниваются по порядку (Фамилия-Имя-Отчество),
+//     хвост длинного имени игнорируется («Новенький 1» ⊂ «Новенький 1 …»),
+//     цифры различают учётки («Новенький 1» ≠ «Новенький 2»)
 function fioMatch(a, b) {
   const na = normalizeFIO(a), nb = normalizeFIO(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
   const wa = na.split(' '), wb = nb.split(' ');
+  if (wa.length === 1 || wb.length === 1) return false;
   if (!wordEq(wa[0], wb[0])) return false;
-  const ra = wa.length > 1 ? wa.slice(1) : [];
-  const rb = wb.length > 1 ? wb.slice(1) : [];
-  if (!ra.length || !rb.length) return true;
-  for (const x of ra) for (const y of rb) if (wordEq(x, y)) return true;
-  return false;
+  const sh = wa.length <= wb.length ? wa : wb;
+  const lo = wa.length <= wb.length ? wb : wa;
+  for (let i = 1; i < sh.length; i++) {
+    if (!wordEq(sh[i], lo[i])) return false;
+  }
+  return true;
 }
 
 // ---------- даты ----------
@@ -1577,6 +1643,14 @@ $('#msHired').onclick = ev => {
 };
 
 // ---------- вкладки ----------
+const navEl = document.querySelector('nav');
+const navOverlay = $('#navOverlay');
+function closeNav() { navEl.classList.remove('open'); navOverlay.classList.remove('show'); }
+$('#btnMenu').onclick = () => {
+  navEl.classList.toggle('open');
+  navOverlay.classList.toggle('show');
+};
+navOverlay.onclick = closeNav;
 function switchTab(name) {
   const btn = document.querySelector('nav button[data-tab="' + name + '"]');
   if (btn) btn.click();
@@ -1588,8 +1662,71 @@ document.querySelectorAll('nav button').forEach(b => {
     document.querySelectorAll('main > section').forEach(s =>
       s.style.display = s.id === 'tab-' + b.dataset.tab ? '' : 'none');
     if (b.dataset.tab === 'checks') loadDups();
+    if (b.dataset.tab === 'errors') loadErrors();
+    closeNav();
+    window.scrollTo(0, 0);
   };
 });
+
+// ---------- ⚠ Ошибки сопоставления (как в VBA «ЗаписатьЛистОшибок») ----------
+// Сотрудники из «Статистики», у которых соответствие в «Баллах»/«Стаже»
+// не найдено, найдено только по фамилии или неоднозначно (несколько вариантов)
+function famEq(a, b) {
+  const ka = normalizeFIO(a), kb = normalizeFIO(b);
+  return !!ka && !!kb && wordEq(ka.split(' ')[0], kb.split(' ')[0]);
+}
+function buildErrors() {
+  const out = [];
+  const seen = new Map();
+  for (const st of db.stats) {
+    const fio = String(st.fio ?? '').trim();
+    if (!fio || !normalizeFIO(fio)) continue;
+    const problems = [];
+    // задвойка в «Статистике»
+    const k = normalizeFIO(fio);
+    if (!seen.has(k)) seen.set(k, []);
+    seen.get(k).push(st.id);
+    // «Баллы»
+    const fullB = db.points.filter(p => fioMatch(fio, p.vals[0]));
+    const famB = fullB.length ? [] : db.points.filter(p => famEq(fio, p.vals[0]));
+    if (!fullB.length && !famB.length) problems.push('Баллы: не найдено');
+    else if (!fullB.length && famB.length) problems.push('Баллы: только по фамилии → ' + famB.slice(0, 3).map(p => cleanName(p.vals[0])).join(' / '));
+    else if (fullB.length > 1) problems.push('Баллы: несколько совпадений (' + fullB.length + ')');
+    // «Стаж»
+    const fullS = db.staff.filter(s => fioMatch(fio, s.fio));
+    const famS = fullS.length ? [] : db.staff.filter(s => famEq(fio, s.fio));
+    if (!fullS.length && !famS.length) problems.push('Стаж: не найдено');
+    else if (!fullS.length && famS.length) problems.push('Стаж: только по фамилии → ' + famS.slice(0, 3).map(s => cleanName(s.fio)).join(' / '));
+    else if (fullS.length > 1) problems.push('Стаж: несколько совпадений (' + fullS.length + ')');
+    if (problems.length) out.push({ fio, row: st.id, problems });
+  }
+  for (const [k, rows] of seen) {
+    if (rows.length > 1) out.push({ fio: k, row: rows.join(', '), problems: ['Статистика: задвойка (строки ' + rows.join(', ') + ')'] });
+  }
+  return out;
+}
+function loadErrors() {
+  const errs = buildErrors();
+  $('#errCount').textContent = 'проблемных сотрудников: ' + errs.length + ' из ' + db.stats.length;
+  $('#navErrors').textContent = errs.length ? '⚠ Ошибки (' + errs.length + ')' : '⚠ Ошибки';
+  $('#navErrors').classList.toggle('alert', errs.length > 0);
+  const box = $('#errorsList');
+  if (!errs.length) {
+    box.innerHTML = '<div class="hint" style="margin-top:10px">✓ Проблем сопоставления не найдено — все сотрудники из «Статистики» разобраны.</div>';
+    return;
+  }
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px">';
+  html += '<tr style="text-align:left"><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Сотрудник</th><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Стр.</th><th style="padding:6px 8px; border-bottom:2px solid var(--border)">Проблема</th></tr>';
+  for (const e of errs) {
+    html += '<tr>' +
+      '<td style="padding:6px 8px; border-bottom:1px solid var(--border)">' + esc(e.fio) + '</td>' +
+      '<td style="padding:6px 8px; border-bottom:1px solid var(--border); color:var(--muted)">' + esc(String(e.row)) + '</td>' +
+      '<td style="padding:6px 8px; border-bottom:1px solid var(--border)">' + e.problems.map(p => '• ' + esc(p)).join('<br>') + '</td>' +
+      '</tr>';
+  }
+  html += '</table>';
+  box.innerHTML = html;
+}
 
 // ---------- 🧪 Проверка: дубли ----------
 const DUP_KINDS = { employees: 'Шаблон', stats: 'Статистика', staff: 'Стаж' };
@@ -1936,6 +2073,7 @@ function runSolution() {
     persist();
     renderSolution();
     renderEmployees();
+    loadErrors();
     toast('Сведение сформировано: ' + db.solution.length + ' строк · шаблон пересобран');
   });
 }
@@ -2344,30 +2482,58 @@ function pickExcelFile() {
 }
 
 // ==================== ОТЧЁТ В EXCEL (порт SaveReport, упрощённый — без заливки) ====================
+// ==================== ОТЧЁТ: КОМПАНИИ ====================
+// компании для отдельных листов отчёта — как в VBA (лист «Настройки», столбец F)
+const REPORT_COMPANIES = ['ПРОФСЕРВИС', 'РЕСУРС', 'ПРО', 'Энисервис'];
+// компания совпадает с именем? — по ЦЕЛЫМ словам:
+// «ПРО» находит «Иванов Иван ПРО», но НЕ «Тарасюк Дарья ПРОФСЕРВИС».
+// Учётки «Новенький N …» — только ПРОФСЕРВИС и никакая другая
+function companyMatch(name, company) {
+  const pad = t => ' ' + String(t ?? '').toUpperCase().replace(/_/g, ' ').replace(/Ё/g, 'Е').replace(/\s+/g, ' ').trim() + ' ';
+  const s = pad(name), k = pad(company);
+  if (s === '  ' || k === '  ') return false;
+  if (s.trim().startsWith('НОВЕНЬКИЙ')) return k.trim() === 'ПРОФСЕРВИС';
+  return s.includes(k);
+}
+
 async function saveReport() {
   if (typeof XLSX === 'undefined') {
     alert('Библиотека Excel ещё не загружена.\nПодключитесь к интернету один раз и подождите пару секунд.');
     return;
   }
   const date = db.settings.date || 'отчет';
-  const aoa = [];
-  aoa.push([]);
-  aoa.push([null, null, 'Норма баллов в час', cellVal(db.settings.normPerHour), db.settings.date]);
-  aoa.push([null, null, 'Часы подбора', cellVal(db.settings.pickingHours)]);
-  aoa.push([null, null, 'Норма баллов в смену', cellVal(db.settings.normPerShift)]);
-  aoa.push([null, 'Этаж', 'Сотрудник', 'Строчки', 'Ошибки', 'Всего баллы', 'Коментарии', 'Стаж работы']);
   const emps = [...db.employees].sort((a, b) => numVal(b.total) - numVal(a.total));
-  for (const e of emps) {
+  const reportRow = e => {
     let stazhVal = stazhFromStaff(db, e);
     if (!stazhVal && !staffContains(db, e)) stazhVal = 'АУТСОРС';
     else if (!stazhVal) stazhVal = e.stazh;
-    aoa.push([null, e.tab, e.fio, cellVal(e.lines), cellVal(e.errors), cellVal(e.total), e.comment, stazhVal]);
-  }
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 2 }, { wch: 16 }, { wch: 36 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 16 }, { wch: 15 }];
+    return [null, e.tab, e.fio, cellVal(e.lines), cellVal(e.errors), cellVal(e.total), e.comment, stazhVal];
+  };
+  const REPORT_COLS = [{ wch: 2 }, { wch: 16 }, { wch: 36 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 16 }, { wch: 15 }];
+  const makeSheet = rows => {
+    const aoa = [];
+    aoa.push([]);
+    aoa.push([null, null, 'Норма баллов в час', cellVal(db.settings.normPerHour), db.settings.date]);
+    aoa.push([null, null, 'Часы подбора', cellVal(db.settings.pickingHours)]);
+    aoa.push([null, null, 'Норма баллов в смену', cellVal(db.settings.normPerShift)]);
+    aoa.push([null, 'Этаж', 'Сотрудник', 'Строчки', 'Ошибки', 'Всего баллы', 'Коментарии', 'Стаж работы']);
+    for (const e of rows) aoa.push(reportRow(e));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = REPORT_COLS;
+    return ws;
+  };
   const wb = XLSX.utils.book_new();
   let sheet = date;
-  XLSX.utils.book_append_sheet(wb, ws, sheet);
+  XLSX.utils.book_append_sheet(wb, makeSheet(emps), sheet);
+  // отдельные листы по компаниям (как в VBA — книги «Баллы (компания).xlsx»,
+  // на телефоне удобнее листы в том же файле): строки только этой компании
+  let compSheets = 0;
+  for (const comp of REPORT_COMPANIES) {
+    const rows = emps.filter(e => companyMatch(e.fio, comp));
+    if (!rows.length) continue;
+    XLSX.utils.book_append_sheet(wb, makeSheet(rows), comp);
+    compSheets++;
+  }
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const fname = 'Отчет ' + date + '.xlsx';
   // подсказка для iOS: файл выдаётся через меню «Поделиться» — нужно выбрать «Сохранить в Файлы»
@@ -2382,7 +2548,8 @@ async function saveReport() {
     localStorage.setItem(HINT_KEY, '1');
   }
   shareOrDownload(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
-  toast('✓ Отчёт «' + sheet + '» (' + db.employees.length + ' сотрудников) — сохраните файл через меню');
+  toast('✓ Отчёт «' + sheet + '» (' + db.employees.length + ' сотрудников)' +
+    (compSheets ? '\n+ листы компаний: ' + compSheets : '') + ' — сохраните файл через меню');
 }
 function cellVal(s) {
   const t = String(s ?? '').trim();
@@ -2417,6 +2584,7 @@ async function runAuto() {
       persist();
       renderSolution();
       renderEmployees();
+      loadErrors();
       toast('⚡ Готово: сведение ' + db.solution.length + ' строк · шаблон пересобран');
     } catch (e) { alert('Ошибка: ' + e.message); }
   });
@@ -2476,25 +2644,45 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
-$('#cmdUpdateApp').onclick = () => withBusy('Скачиваю обновление', () => new Promise(resolve => {
-  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-    // офлайн-кэша нет (открыто в обычном Safari без SW) — просто перезагрузить
-    setTimeout(() => { location.reload(); resolve(); }, 300);
-    return;
-  }
-  let done = false;
-  navigator.serviceWorker.addEventListener('message', ev => {
-    if (ev.data !== 'cache-updated' || done) return;
-    done = true;
-    resolve();
-    location.reload();
-  }, { once: true });
-  // страховка: если сеть недоступна — всё равно перезагрузить через 20 секунд
-  setTimeout(() => { if (!done) { done = true; resolve(); location.reload(); } }, 20000);
-  navigator.serviceWorker.controller.postMessage('update-cache');
-}));
+function updateAppFlow() {
+  return withBusy('Скачиваю обновление', () => new Promise(resolve => {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+      // офлайн-кэша нет (открыто в обычном Safari без SW) — просто перезагрузить
+      setTimeout(() => { location.reload(); resolve(); }, 300);
+      return;
+    }
+    let done = false;
+    navigator.serviceWorker.addEventListener('message', ev => {
+      if (ev.data !== 'cache-updated' || done) return;
+      done = true;
+      resolve();
+      location.reload();
+    }, { once: true });
+    // страховка: если сеть недоступна — всё равно перезагрузить через 20 секунд
+    setTimeout(() => { if (!done) { done = true; resolve(); location.reload(); } }, 20000);
+    navigator.serviceWorker.controller.postMessage('update-cache');
+  }));
+}
+$('#cmdUpdateApp').onclick = updateAppFlow;
+// автопроверка при запуске: сверяем свою версию с версией на сайте
+// (version.json service worker не кэширует — всегда свежая)
+async function checkForUpdate() {
+  try {
+    if (!navigator.onLine) return;
+    const r = await fetch('version.json?nocache=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j && j.version && j.version !== APP_VERSION) {
+      const go = await dlg('Доступно обновление ' + j.version,
+        'У вас установлена версия ' + APP_VERSION + ', на сайте — ' + j.version + '.\n\nОбновить сейчас? Данные на телефоне не пострадают.',
+        '🔄 Обновить');
+      if (go) updateAppFlow();
+    }
+  } catch (e) { /* нет сети — молча пропустить */ }
+}
+setTimeout(checkForUpdate, 2500);
 
 // ==================== СТАРТ ====================
 // при каждом запуске — дата по умолчанию = вчера (как в настольной версии)
