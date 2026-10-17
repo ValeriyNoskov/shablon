@@ -2642,7 +2642,12 @@ async function saveReport() {
     localStorage.setItem(HINT_KEY, '1');
   }
   shareOrDownload(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
-  toast('✓ Отчёт «' + date + '»: ' + emps.length + ' сотрудников\n+ листы компаний — сохраните файл через меню');
+  const compCount = REPORT_COMPANIES.reduce((n, c) => n + emps.filter(e => companyMatch(e.fio, c)).length, 0);
+  const compSheets = REPORT_COMPANIES.filter(c => emps.some(e => companyMatch(e.fio, c))).length;
+  toast('✓ Отчёт «' + date + '»: ' + emps.length + ' сотрудников' +
+    (compSheets
+      ? '\n+ листы компаний: ' + compSheets + ' (' + compCount + ' сотр.) — сохраните через меню'
+      : '\n⚠ листы компаний не созданы: в именах нет компаний.\nЗаново загрузите Excel («⚡ Авто» или «📥 Загрузить из Excel»)'));
 }
 // отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
 // «Сохранить в Файлы» сохранит их все разом
@@ -2748,7 +2753,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.8';
+const APP_VERSION = '1.9';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
