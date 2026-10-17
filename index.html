@@ -354,6 +354,25 @@
       </div>
       <div class="hint">Каждый шаг отдельно. JSON, сброс данных — в «⚙ Настройка».</div>
     </div>
+  </section>
+
+  <!-- ======= Вкладка Ошибки ======= -->
+  <section id="tab-errors" style="display:none">
+    <div class="panel">
+      <h2>⚠ Ошибки сопоставления</h2>
+      <div class="toolbar">
+        <span class="count" id="errCount"></span>
+      </div>
+      <div class="table-wrap" id="errorsList"></div>
+      <div class="hint">
+        Сотрудники из «Статистики», у которых соответствие в «Баллах»/«Стаже» не найдено,
+        найдено только по фамилии или неоднозначно. Пересчитывается при каждом открытии вкладки.
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Настройка ======= -->
+  <section id="tab-settings" style="display:none">
     <div class="panel">
       <h2>Настройки шаблона</h2>
       <div class="xl-params" style="border:none;padding:0;box-shadow:none;background:transparent">
@@ -375,25 +394,6 @@
       </div>
       <div class="hint">Норма в смену считается сама (норма в час × часы). Дата влияет на расчёт стажа и авто-категории.</div>
     </div>
-  </section>
-
-  <!-- ======= Вкладка Ошибки ======= -->
-  <section id="tab-errors" style="display:none">
-    <div class="panel">
-      <h2>⚠ Ошибки сопоставления</h2>
-      <div class="toolbar">
-        <span class="count" id="errCount"></span>
-      </div>
-      <div class="table-wrap" id="errorsList"></div>
-      <div class="hint">
-        Сотрудники из «Статистики», у которых соответствие в «Баллах»/«Стаже» не найдено,
-        найдено только по фамилии или неоднозначно. Пересчитывается при каждом открытии вкладки.
-      </div>
-    </div>
-  </section>
-
-  <!-- ======= Вкладка Настройка ======= -->
-  <section id="tab-settings" style="display:none">
     <div class="panel">
       <h2>Данные</h2>
       <div class="toolbar">
@@ -2649,7 +2649,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {

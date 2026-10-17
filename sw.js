@@ -59,7 +59,12 @@ self.addEventListener('fetch', e => {
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }
         return res;
-      }).catch(() => caches.match('./index.html'));
+      }).catch(() => {
+        // офлайн-заглушка index.html — только для переходов по страницам;
+        // для картинок и файлов отдаём ошибку, чтобы не подсовывать HTML вместо PNG
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      });
     })
   );
 });
