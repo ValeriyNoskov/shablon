@@ -353,6 +353,17 @@
       </div>
     </div>
     <div class="panel">
+      <h2>Обновление приложения</h2>
+      <div class="toolbar">
+        <button class="btn primary" id="cmdUpdateApp" title="Скачать новую версию с сайта и перезагрузить">🔄 Обновить приложение</button>
+        <span class="count" id="appVersion"></span>
+      </div>
+      <div class="hint">
+        Нажмите, если я сказал, что вышла новая версия: приложение скачает её и перезагрузится.
+        Данные на телефоне не пострадают — обновляется только программа. Нужен интернет.
+      </div>
+    </div>
+    <div class="panel">
       <h2>О приложении</h2>
       <div class="hint" style="font-size:12px; line-height:1.6">
         Автономная версия настольной программы «Шаблон выгрузки» для iPhone/iPad.<br>
@@ -2439,6 +2450,27 @@ $('#cmdAddEmp').onclick = () => $('#btnAddEmp').click();
 $('#cmdExportJson').onclick = () => download();
 $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
+
+// ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
+const APP_VERSION = '1.1';
+$('#appVersion').textContent = 'версия: ' + APP_VERSION;
+$('#cmdUpdateApp').onclick = () => withBusy('Скачиваю обновление', () => new Promise(resolve => {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    // офлайн-кэша нет (открыто в обычном Safari без SW) — просто перезагрузить
+    setTimeout(() => { location.reload(); resolve(); }, 300);
+    return;
+  }
+  let done = false;
+  navigator.serviceWorker.addEventListener('message', ev => {
+    if (ev.data !== 'cache-updated' || done) return;
+    done = true;
+    resolve();
+    location.reload();
+  }, { once: true });
+  // страховка: если сеть недоступна — всё равно перезагрузить через 20 секунд
+  setTimeout(() => { if (!done) { done = true; resolve(); location.reload(); } }, 20000);
+  navigator.serviceWorker.controller.postMessage('update-cache');
+}));
 
 // ==================== СТАРТ ====================
 // при каждом запуске — дата по умолчанию = вчера (как в настольной версии)

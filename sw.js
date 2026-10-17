@@ -23,6 +23,23 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('message', e => {
+  if (e.data === 'update-cache') {
+    // принудительно перекачать все файлы приложения из сети (minache)
+    e.waitUntil((async () => {
+      const c = await caches.open(CACHE);
+      await Promise.all(ASSETS.map(async u => {
+        try {
+          const r = await fetch(u, { cache: 'reload' });
+          if (r && r.ok) await c.put(u, r);
+        } catch (err) { /* нет сети — оставляем старую копию */ }
+      }));
+      const cl = await self.clients.matchAll();
+      cl.forEach(client => client.postMessage('cache-updated'));
+    })());
+  }
+});
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
