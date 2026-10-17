@@ -400,7 +400,6 @@
           <tr>
             <td class="xl-green lbl">Норма баллов в час</td>
             <td class="xl-green val"><input id="pNormHour" type="number" step="any"></td>
-            <td class="xl-date" rowspan="3" style="min-width:150px"><label>Дата</label><input id="pDate" type="text" placeholder="ДД.ММ.ГГГГ" readonly style="cursor:pointer"><button class="btn" id="btnYdayP" title="Поставить вчерашнюю дату">⏮ Вчера</button></td>
           </tr>
           <tr>
             <td class="xl-green lbl">Часы подбора</td>
@@ -412,15 +411,36 @@
           </tr>
         </table>
       </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap">
+        <label style="font-weight:700">📅 Дата</label>
+        <input id="pDate" type="text" placeholder="ДД.ММ.ГГГГ" readonly style="cursor:pointer; border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:15px; font-weight:700; min-width:130px; text-align:center; background:#fff">
+        <button class="btn" id="btnYdayP" title="Поставить вчерашнюю дату">⏮ Вчера</button>
+      </div>
       <div class="hint">Норма в смену считается сама (норма в час × часы). Дата влияет на расчёт стажа и авто-категории.</div>
     </div>
     <div class="panel">
       <h2>Компании для книг отчёта</h2>
-      <input id="setCompanies" type="text" placeholder="ПРОФСЕРВИС, РЕСУРС, ПРО, Энисервис" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px">
+      <div id="setCompaniesChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px"></div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <input id="newCompany" type="text" placeholder="Новая компания" style="flex:1; min-width:140px; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px">
+        <button class="btn" id="cmdAddCompany">➕ Добавить</button>
+      </div>
       <div class="hint">
-        Через запятую — как в листе «Настройки» в Excel-версии (столбец F).
+        Список защищён от случайного изменения: компании нельзя стереть по ошибке,
+        добавление — только через поле выше. Удалить компанию можно крестиком на плитке (с подтверждением).
         По этим словам ищутся сотрудники для отдельных книг «Баллы (компания).xlsx».
         Совпадение по ЦЕЛЫМ словам: «ПРО» не цепляет «ПРОФСЕРВИС».
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Обновление приложения</h2>
+      <div class="toolbar">
+        <button class="btn primary" id="cmdUpdateApp" title="Скачать новую версию с сайта и перезагрузить">🔄 Обновить приложение</button>
+        <span class="count" id="appVersion"></span>
+      </div>
+      <div class="hint">
+        Нажмите, если я сказал, что вышла новая версия: приложение скачает её и перезагрузится.
+        Данные на телефоне не пострадают — обновляется только программа. Нужен интернет.
       </div>
     </div>
     <div class="panel">
@@ -434,17 +454,6 @@
       <div class="hint">
         Все изменения автоматически сохраняются в память iPhone (localStorage) — интернет не нужен.<br>
         <b>Важно:</b> раз в неделю-две делайте «📤 Экспорт JSON» — это резервная копия на случай очистки Safari.
-      </div>
-    </div>
-    <div class="panel">
-      <h2>Обновление приложения</h2>
-      <div class="toolbar">
-        <button class="btn primary" id="cmdUpdateApp" title="Скачать новую версию с сайта и перезагрузить">🔄 Обновить приложение</button>
-        <span class="count" id="appVersion"></span>
-      </div>
-      <div class="hint">
-        Нажмите, если я сказал, что вышла новая версия: приложение скачает её и перезагрузится.
-        Данные на телефоне не пострадают — обновляется только программа. Нужен интернет.
       </div>
     </div>
     <div class="panel">
@@ -1381,8 +1390,59 @@ function renderSettings() {
   $('#pHours').value = db.settings.pickingHours;
   $('#pNormShift').value = db.settings.normPerShift;
   $('#pDate').value = db.settings.date;
-  $('#setCompanies').value = companiesList().join(', ');
+  renderCompaniesChips();
 }
+
+// список компаний для книг отчёта («⚙ Настройка»): плитки только для чтения —
+// случайно стереть нельзя; добавление через поле + «➕ Добавить»,
+// удаление — крестиком на плитке с подтверждением
+function renderCompaniesChips() {
+  const box = $('#setCompaniesChips');
+  if (!box) return;
+  box.innerHTML = '';
+  companiesList().forEach(c => {
+    const chip = document.createElement('span');
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#eef3f8;border:1px solid var(--border);border-radius:16px;padding:6px 7px 6px 13px;font-size:14px;font-weight:700';
+    const txt = document.createElement('span');
+    txt.textContent = c;
+    chip.appendChild(txt);
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.title = 'Удалить компанию';
+    x.style.cssText = 'border:none;background:#dde5ee;border-radius:50%;width:22px;height:22px;font-size:12px;line-height:1;color:#667;padding:0;cursor:pointer';
+    x.onclick = async () => {
+      const rest = companiesList().filter(k => k !== c);
+      const ok = await dlg('Удалить компанию',
+        'Убрать «' + c + '» из списка?\n\nКнига «Баллы (' + c + ').xlsx» больше не будет создаваться.',
+        'Удалить');
+      if (!ok) return;
+      if (rest.length) db.settings.companies = rest;
+      else delete db.settings.companies;
+      persist();
+      renderCompaniesChips();
+      toast('Компании: ' + companiesList().join(', '));
+    };
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+function addCompanyFromInput() {
+  const inp = $('#newCompany');
+  const name = (inp.value || '').trim();
+  if (!name) { toast('Введите название компании'); return; }
+  if (companiesList().some(k => k.toLowerCase() === name.toLowerCase())) {
+    toast('«' + name + '» уже есть в списке');
+    inp.value = '';
+    return;
+  }
+  db.settings.companies = companiesList().concat([name]);
+  persist();
+  renderCompaniesChips();
+  inp.value = '';
+  toast('Добавлено: ' + name + '\nКомпании: ' + companiesList().join(', '));
+}
+$('#cmdAddCompany').onclick = addCompanyFromInput;
+$('#newCompany').addEventListener('keydown', e => { if (e.key === 'Enter') addCompanyFromInput(); });
 
 // синхронные копии полей «Программа» ↔ «Шаблон»
 function bindTwin(sel, key) {
@@ -1395,21 +1455,6 @@ function bindTwin(sel, key) {
   });
 }
 [['#pNormHour', 'normPerHour'], ['#pHours', 'pickingHours'], ['#pDate', 'date']].forEach(([sel, key]) => bindTwin(sel, key));
-
-// список компаний для книг отчёта («⚙ Настройка»)
-$('#setCompanies').addEventListener('change', () => {
-  const list = $('#setCompanies').value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
-  if (list.length) {
-    db.settings.companies = list;
-    persist();
-    toast('Компании: ' + list.join(', '));
-  } else {
-    delete db.settings.companies;
-    persist();
-    $('#setCompanies').value = companiesList().join(', ');
-    toast('Компании: по умолчанию (' + companiesList().join(', ') + ')');
-  }
-});
 
 function filteredEmployees() {
   const q = $('#search').value.toLowerCase().trim();
@@ -2040,7 +2085,8 @@ $('#fileInput').onchange = async ev => {
 };
 $('#cmdResetData').onclick = async () => {
   const ok = await dlg('Сброс данных',
-    'Все правки будут УДАЛЕНЫ, вернутся встроенные данные (56 сотрудников, справочник стажа, баллы, статистика).\n\nПродолжить?', 'Сбросить');
+    'Точно сбросить?\n\nВсе правки будут УДАЛЕНЫ, вернутся встроенные данные (56 сотрудников, справочник стажа, баллы, статистика).',
+    'Да', 'Нет');
   if (!ok) return;
   db = JSON.parse(JSON.stringify(window.DEFAULT_DB));
   localStorage.removeItem(LS_KEY);
@@ -2875,7 +2921,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.8';
+const APP_VERSION = '2.9';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
