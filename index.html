@@ -420,14 +420,15 @@
     </div>
     <div class="panel">
       <h2>Компании для книг отчёта</h2>
-      <div id="setCompaniesChips" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px"></div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+      <div class="hint" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+        <span id="companiesSummary"></span>
+        <button class="btn" id="cmdViewCompanies" title="Показать/скрыть список компаний" style="flex:none; padding:6px 14px">📋 Список</button>
+        <button class="btn" id="cmdCompanyHelp" title="Как это работает" style="flex:none; padding:6px 12px">❓</button>
+      </div>
+      <div id="setCompaniesChips" style="display:none; flex-direction:column; gap:8px; margin-top:10px"></div>
+      <div id="companyAddRow" style="display:none; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px">
         <input id="newCompany" type="text" placeholder="Новая компания" style="flex:1; min-width:140px; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px">
         <button class="btn" id="cmdAddCompany">➕ Добавить</button>
-      </div>
-      <div class="hint" style="display:flex; align-items:center; gap:8px">
-        <span>Слова в поле «=» отправляют сотрудников в книгу этой компании.</span>
-        <button class="btn" id="cmdCompanyHelp" title="Как это работает" style="flex:none; padding:4px 12px">❓</button>
       </div>
     </div>
     <div class="panel">
@@ -1411,7 +1412,10 @@ function renderCompaniesChips() {
   const box = $('#setCompaniesChips');
   if (!box) return;
   box.innerHTML = '';
-  companiesList().forEach(c => {
+  const list = companiesList();
+  const sum = $('#companiesSummary');
+  if (sum) sum.textContent = 'Компаний: ' + list.length;
+  list.forEach(c => {
     // одна строка = одна компания: плитка слева (фикс. ширина — поля ровные),
     // поле слов отбора справа
     const row = document.createElement('div');
@@ -1478,6 +1482,14 @@ function addCompanyFromInput() {
 }
 $('#cmdAddCompany').onclick = addCompanyFromInput;
 $('#newCompany').addEventListener('keydown', e => { if (e.key === 'Enter') addCompanyFromInput(); });
+// список компаний свёрнут — открывается по кнопке (чтобы настройка не разрасталась)
+$('#cmdViewCompanies').onclick = () => {
+  const box = $('#setCompaniesChips'), add = $('#companyAddRow');
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'flex';
+  add.style.display = open ? 'none' : 'flex';
+  $('#cmdViewCompanies').textContent = open ? '📋 Список' : '🔼 Скрыть список';
+};
 $('#cmdCompanyHelp').onclick = () => dlg('Компании для книг отчёта',
   'СПИСОК КОМПАНИЙ\n' +
   'Защищён от случайного изменения: компанию нельзя стереть по ошибке. ' +
@@ -3084,7 +3096,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.7';
+const APP_VERSION = '3.8';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
