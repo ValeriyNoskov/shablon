@@ -427,9 +427,12 @@
       </div>
       <div class="hint">
         Список защищён от случайного изменения: компании нельзя стереть по ошибке,
-        добавление — только через поле выше. Удалить компанию можно крестиком на плитке (с подтверждением).
-        По этим словам ищутся сотрудники для отдельных книг «Баллы (компания).xlsx».
-        Совпадение по ЦЕЛЫМ словам: «ПРО» не цепляет «ПРОФСЕРВИС».
+        добавление — только через поле выше. Удалить компанию можно крестиком на плитке (с подтверждением).<br>
+        <b>Связь с именами:</b> в поле «=» впишите слова/фразы через запятую — и все сотрудники,
+        в чьём имени они встречаются, попадут в книгу этой компании.
+        Пример: <b>ПРОФСЕРВИС = Подбор мез</b> → «Стажёр 1 Подбор мез» уйдёт в «Баллы (ПРОФСЕРВИС).xlsx».
+        Совпадение по подстроке, без учёта регистра; слово компании в имени тоже работает как раньше
+        (по ЦЕЛЫМ словам: «ПРО» не цепляет «ПРОФСЕРВИС»).
       </div>
     </div>
     <div class="panel">
@@ -1401,6 +1404,8 @@ function renderCompaniesChips() {
   if (!box) return;
   box.innerHTML = '';
   companiesList().forEach(c => {
+    const row = document.createElement('div');
+    row.style.cssText = 'margin-bottom:10px';
     const chip = document.createElement('span');
     chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#eef3f8;border:1px solid var(--border);border-radius:16px;padding:6px 7px 6px 13px;font-size:14px;font-weight:700';
     const txt = document.createElement('span');
@@ -1418,12 +1423,38 @@ function renderCompaniesChips() {
       if (!ok) return;
       if (rest.length) db.settings.companies = rest;
       else delete db.settings.companies;
+      if (db.settings.companyRules) delete db.settings.companyRules[c];
       persist();
       renderCompaniesChips();
       toast('Компании: ' + companiesList().join(', '));
     };
     chip.appendChild(x);
-    box.appendChild(chip);
+    row.appendChild(chip);
+    // правило отбора: «ПРОФСЕРВИС = Подбор мез» — слова/фразы через запятую,
+    // по которым сотрудники попадают в книгу этой компании
+    const line = document.createElement('div');
+    line.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px';
+    const eq = document.createElement('span');
+    eq.textContent = '=';
+    eq.style.cssText = 'font-weight:700;color:#567;font-size:14px';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.inputMode = 'text';
+    inp.value = companyKeywords(c).join(', ');
+    inp.placeholder = 'слова отбора через запятую, напр. Подбор мез';
+    inp.style.cssText = 'flex:1;min-width:120px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px';
+    inp.onchange = () => {
+      db.settings.companyRules = db.settings.companyRules || {};
+      const v = inp.value.trim();
+      if (v) db.settings.companyRules[c] = v;
+      else delete db.settings.companyRules[c];
+      persist();
+      toast(c + ' = ' + (v || '(без слов отбора)'));
+    };
+    line.appendChild(eq);
+    line.appendChild(inp);
+    row.appendChild(line);
+    box.appendChild(row);
   });
 }
 function addCompanyFromInput() {
@@ -2640,13 +2671,27 @@ function companiesList() {
 }
 // компания совпадает с именем? — по ЦЕЛЫМ словам:
 // «ПРО» находит «Иванов Иван ПРО», но НЕ «Тарасюк Дарья ПРОФСЕРВИС».
-// Учётки «Новенький N …» — только ПРОФСЕРВИС и никакая другая
+// Учётки «Новенький N …» — только ПРОФСЕРВИС и никакая другая.
+// ПЛЮС правила из «⚙ Настройка» вида «ПРОФСЕРВИС = Подбор мез»:
+// если в имени есть любое из слов/фраз компании — сотрудник попадает
+// в её книгу (например, «Стажёр 1 Подбор мез» → ПРОФСЕРВИС)
+function companyRules() {
+  const r = db.settings && db.settings.companyRules;
+  return r && typeof r === 'object' ? r : {};
+}
+function companyKeywords(company) {
+  const v = companyRules()[company];
+  if (!v) return [];
+  return String(v).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+}
 function companyMatch(name, company) {
   const pad = t => ' ' + String(t ?? '').toUpperCase().replace(/_/g, ' ').replace(/Ё/g, 'Е').replace(/\s+/g, ' ').trim() + ' ';
   const s = pad(name), k = pad(company);
   if (s === '  ' || k === '  ') return false;
   if (s.trim().startsWith('НОВЕНЬКИЙ')) return k.trim() === 'ПРОФСЕРВИС';
-  return s.includes(k);
+  if (s.includes(k)) return true;
+  // правила из настроек: «ПРОФСЕРВИС = Подбор мез» (по подстроке, без учёта регистра)
+  return companyKeywords(company).some(kw => s.includes(pad(kw).trim()));
 }
 
 async function saveReport() {
@@ -2921,7 +2966,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.0';
+const APP_VERSION = '3.1';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
