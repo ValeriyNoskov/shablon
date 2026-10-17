@@ -733,6 +733,7 @@
 <input type="file" id="fileInput" accept=".json" style="display:none">
 <script src="data.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script>
 'use strict';
 
@@ -2502,51 +2503,120 @@ function companyMatch(name, company) {
 }
 
 async function saveReport() {
-  if (typeof XLSX === 'undefined') {
+  if (typeof ExcelJS === 'undefined') {
     alert('Библиотека Excel ещё не загружена.\nПодключитесь к интернету один раз и подождите пару секунд.');
     return;
   }
   const date = db.settings.date || 'отчет';
   const emps = [...db.employees].sort((a, b) => numVal(b.total) - numVal(a.total));
-  const reportRow = e => {
-    let stazhVal = stazhFromStaff(db, e);
-    if (!stazhVal && !staffContains(db, e)) stazhVal = 'АУТСОРС';
-    else if (!stazhVal) stazhVal = e.stazh;
-    return [null, e.tab, e.fio, cellVal(e.lines), cellVal(e.errors), cellVal(e.total), e.comment, stazhVal];
+  // цвета категорий — как в Excel-версии и как на экране
+  const CAT_FILL = {
+    'АУТСОРС':    { argb: 'FF00B0F0' },  // голубой
+    'ОТСТАЮЩИЕ':  { argb: 'FFFF5252' },  // красный
+    'НОВЕНЬКИЕ':  { argb: 'FFFFE066' },  // жёлтый
+    'ПОДРАБОТКА': { argb: 'FFFFB84D' },  // оранжевый
   };
-  const REPORT_COLS = [{ wch: 2 }, { wch: 16 }, { wch: 36 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 16 }, { wch: 15 }];
-  const makeSheet = rows => {
-    const aoa = [];
-    aoa.push([]);
-    aoa.push([null, null, 'Норма баллов в час', cellVal(db.settings.normPerHour), db.settings.date]);
-    aoa.push([null, null, 'Часы подбора', cellVal(db.settings.pickingHours)]);
-    aoa.push([null, null, 'Норма баллов в смену', cellVal(db.settings.normPerShift)]);
-    aoa.push([null, 'Этаж', 'Сотрудник', 'Строчки', 'Ошибки', 'Всего баллы', 'Коментарии', 'Стаж работы']);
-    for (const e of rows) aoa.push(reportRow(e));
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = REPORT_COLS;
+  const CAT_FONT = {
+    'АУТСОРС': 'FF08303F', 'ОТСТАЮЩИЕ': 'FF3D0000',
+    'НОВЕНЬКИЕ': 'FF4D3A00', 'ПОДРАБОТКА': 'FF4D2B00',
+  };
+  const GREEN = { argb: 'FF92D050' };
+  const thin = { style: 'thin', color: { argb: 'FFB0B8C0' } };
+  const borderAll = { top: thin, left: thin, bottom: thin, right: thin };
+
+  const addSheet = name => {
+    const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 5 }] });
+    ws.getColumn(1).width = 2;
+    ws.getColumn(2).width = 16;   // Этаж
+    ws.getColumn(3).width = 38;   // Сотрудник
+    ws.getColumn(4).width = 12;   // Строчки
+    ws.getColumn(5).width = 9;    // Ошибки
+    ws.getColumn(6).width = 14;   // Всего баллы
+    ws.getColumn(7).width = 16;   // Коментарии
+    ws.getColumn(8).width = 17;   // Стаж работы
+    ws.getColumn(11).width = 14;  // легенда
+    ws.getColumn(12).width = 14;
     return ws;
   };
-  const wb = XLSX.utils.book_new();
-  let sheet = date;
-  XLSX.utils.book_append_sheet(wb, makeSheet(emps), sheet);
-  // отдельные КНИГИ по компаниям — как в VBA («Баллы (компания).xlsx»):
-  // строки только этой компании, внутри лист с датой отчёта
-  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  const outFiles = [{
-    name: 'Отчет ' + date + '.xlsx',
-    blob: new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: XLSX_TYPE }),
-  }];
+  const fillParams = ws => {
+    const rows = [
+      [3, 'Норма баллов в час', 4, db.settings.normPerHour, 5, db.settings.date],
+      [3, 'Часы подбора', 4, db.settings.pickingHours],
+      [3, 'Норма баллов в смену', 4, db.settings.normPerShift],
+    ];
+    rows.forEach((r, i) => {
+      const row = ws.getRow(2 + i);
+      row.getCell(3).value = r[1];
+      row.getCell(4).value = cellVal(r[3]);
+      if (r[4] !== undefined) row.getCell(5).value = r[5];
+      for (const c of [3, 4, 5]) {
+        const cell = row.getCell(c);
+        if (c !== 5 || i === 0) { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: GREEN }; }
+        cell.border = borderAll;
+        if (c === 3) cell.font = { bold: true };
+        if (c === 4) cell.font = { bold: true, color: { argb: 'FF1F4E79' } };
+      }
+    });
+  };
+  const fillLegend = ws => {
+    // легенда в столбцах K/L (как в Excel-версии)
+    const items = [['ОТСТАЮЩИЕ', 1], ['НОВЕНЬКИЕ', 2], ['АУТСОРС', 3], ['ПОДРАБОТКА', 4]];
+    for (const [cat, rowNum] of items) {
+      const cell = ws.getRow(rowNum).getCell(11);
+      cell.value = cat.toLowerCase();
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: CAT_FILL[cat] };
+      cell.font = { bold: true, color: { argb: CAT_FONT[cat] } };
+      cell.border = borderAll;
+      cell.alignment = { horizontal: 'center' };
+    }
+  };
+  const fillRows = (ws, list) => {
+    const head = ws.getRow(5);
+    ['Этаж', 'Сотрудник', 'Строчки', 'Ошибки', 'Всего баллы', 'Коментарии', 'Стаж работы'].forEach((h, i) => {
+      const cell = head.getCell(2 + i);
+      cell.value = h;
+      cell.font = { bold: true };
+      cell.border = borderAll;
+      cell.alignment = { vertical: 'middle' };
+    });
+    head.height = 20;
+    let r = 5;
+    for (const e of list) {
+      r++;
+      const row = ws.getRow(r);
+      let stazhVal = stazhFromStaff(db, e);
+      if (!stazhVal && !staffContains(db, e)) stazhVal = 'АУТСОРС';
+      else if (!stazhVal) stazhVal = e.stazh;
+      const vals = [e.tab, e.fio, cellVal(e.lines), cellVal(e.errors), cellVal(e.total), e.comment, stazhVal];
+      const cat = e.category || autoCat(e);
+      for (let c = 0; c < 7; c++) {
+        const cell = row.getCell(2 + c);
+        cell.value = vals[c];
+        cell.border = borderAll;
+        if (cat && CAT_FILL[cat]) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: CAT_FILL[cat] };
+          cell.font = { color: { argb: CAT_FONT[cat] } };
+        }
+      }
+    }
+  };
+
+  const wb = new ExcelJS.Workbook();
+  const wsMain = addSheet(date);
+  fillParams(wsMain);
+  fillLegend(wsMain);
+  fillRows(wsMain, emps);
+  // листы по компаниям — как в VBA, но в ТОМ ЖЕ файле:
+  // строки только этой компании, «Новенький N» → только ПРОФСЕРВИС
   for (const comp of REPORT_COMPANIES) {
     const rows = emps.filter(e => companyMatch(e.fio, comp));
     if (!rows.length) continue;
-    const wbC = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wbC, makeSheet(rows), sheet);
-    outFiles.push({
-      name: 'Баллы (' + comp + ').xlsx',
-      blob: new Blob([XLSX.write(wbC, { bookType: 'xlsx', type: 'array' })], { type: XLSX_TYPE }),
-    });
+    const wsC = addSheet(comp);
+    fillParams(wsC);
+    fillRows(wsC, rows);
   }
+  const buf = await wb.xlsx.writeBuffer();
+  const fname = 'Отчет ' + date + '.xlsx';
   // подсказка для iOS: файл выдаётся через меню «Поделиться» — нужно выбрать «Сохранить в Файлы»
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -2558,8 +2628,8 @@ async function saveReport() {
     if (!go) return;
     localStorage.setItem(HINT_KEY, '1');
   }
-  shareOrDownloadMany(outFiles);
-  toast('✓ Файлов: ' + outFiles.length + ' (отчёт + компании) — сохраните все через меню');
+  shareOrDownload(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
+  toast('✓ Отчёт «' + date + '»: ' + emps.length + ' сотрудников\n+ листы компаний — сохраните файл через меню');
 }
 // отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
 // «Сохранить в Файлы» сохранит их все разом
@@ -2665,7 +2735,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
