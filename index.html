@@ -667,6 +667,7 @@
       </div>
       <div class="toolbar">
         <button class="btn" id="btnCheckDups">🔄 Проверить дубли</button>
+        <button class="btn" id="cmdDedupeStaff" title="Автоматически убрать задвоенные записи справочника стажа">🧹 Убрать дубли стажа</button>
         <span class="spacer"></span>
         <span class="count" id="checksCount"></span>
       </div>
@@ -2037,6 +2038,20 @@ $('#checksList').onclick = async ev => {
   await applyResolve(+btn.dataset.resolve, 'dup');
 };
 $('#btnCheckDups').onclick = () => loadDups();
+// автоматическая чистка задвоек справочника стажа (накопились в старых версиях)
+$('#cmdDedupeStaff').onclick = async () => {
+  const ok = await dlg('Убрать дубли стажа?',
+    'Из справочника «Стаж» будут удалены задвоенные записи одного человека\n' +
+    '(одинаковые ФИО, в т.ч. с разными номерами URTN; останется запись с номером и более полным именем).\n\n' +
+    'Разные люди не пострадают.', 'Убрать');
+  if (!ok) return;
+  const removed = dedupeStaff();
+  persist();
+  renderStaff();
+  loadDups();
+  loadErrors();
+  toast(removed ? 'Убрано дублей стажа: ' + removed : 'Дублей в стаже не найдено');
+};
 
 // модалка разбора дублей внутри «⚡ Авто»
 function dupModalFlow() {
@@ -3137,7 +3152,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '4.0';
+const APP_VERSION = '4.1';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
