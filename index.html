@@ -2035,8 +2035,28 @@ function sheetRows(wb, name) {
   while (aoa.length && aoa[aoa.length - 1].every(c => String(c).trim() === '')) aoa.pop();
   return aoa;
 }
+// как в VBA (СкопироватьЛист): «первая ПУСТАЯ строка = конец данных» —
+// всё после первой полностью пустой строки НЕ грузится (ниже неё бывает старый мусор)
+function cutAtFirstEmptyRow(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].every(c => String(c ?? '').trim() === '')) return rows.slice(0, i);
+  }
+  return rows;
+}
+// как в VBA (ДополнитьЛист, «Стаж»): грузим до последней непустой строки столбца A,
+// внутренние пустые строки пропускаются по отдельности
+function cutAtLastNonEmptyColA(rows) {
+  let last = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() !== '') last = i;
+  }
+  return last >= 0 ? rows.slice(0, last + 1) : [];
+}
 
 function importPointsRows(rows) {
+  // как в VBA (СкопироватьЛист): грузим только до ПЕРВОЙ полностью пустой строки —
+  // ниже неё в файле бывает старый мусор
+  rows = cutAtFirstEmptyRow(rows);
   const pts = [];
   let id = 0;
   for (const row of rows) {
@@ -2052,6 +2072,8 @@ function importPointsRows(rows) {
   return pts.length;
 }
 function importStatsRows(rows) {
+  // как в VBA (СкопироватьЛист): только до первой полностью пустой строки
+  rows = cutAtFirstEmptyRow(rows);
   const out = [];
   let id = 0;
   for (const row of rows) {
@@ -2070,6 +2092,8 @@ function importStatsRows(rows) {
   return out.length;
 }
 function importStaffRows(rows) {
+  // как в VBA (ДополнитьЛист): до последней непустой строки столбца A
+  rows = cutAtLastNonEmptyColA(rows);
   let added = 0, skipped = 0;
   const out = [];
   let id = 0;
@@ -2452,7 +2476,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#cmdUpdateApp').onclick = () => withBusy('Скачиваю обновление', () => new Promise(resolve => {
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
