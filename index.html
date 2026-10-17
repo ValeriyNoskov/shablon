@@ -2659,10 +2659,12 @@ async function saveReport() {
   shareOrDownloadMany(outFiles);
   const compCount = REPORT_COMPANIES.reduce((n, c) => n + emps.filter(e => companyMatch(e.fio, c)).length, 0);
   const compBooks = outFiles.length - 1;
-  toast('✓ Файлов: ' + outFiles.length + ' — Отчет + ' + compBooks + ' компаний (' + compCount + ' сотр.)\nВ меню выберите «Сохранить в Файлы» — сохранятся все сразу' +
+  const breakdown = REPORT_COMPANIES
+    .map(c => c + ' ' + emps.filter(e => companyMatch(e.fio, c)).length).join(' · ');
+  toast('✓ Файлов: ' + outFiles.length + ' (Отчет + компании)\n' + breakdown +
     (compBooks === 0
-      ? '\n⚠ компании не найдены: в именах нет компаний.\nЗаново загрузите Excel («⚡ Авто» или «📥 Загрузить из Excel»)'
-      : ''));
+      ? '\n⚠ ни у кого нет компании в имени — заново загрузите Excel'
+      : '') + '\nВ меню выберите «Сохранить в Файлы»');
 }
 // отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
 // «Сохранить в Файлы» сохранит их все разом
@@ -2773,7 +2775,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
