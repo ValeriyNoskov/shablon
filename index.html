@@ -1734,9 +1734,33 @@ document.querySelectorAll('nav button').forEach(b => {
 // ---------- ⚠ Ошибки сопоставления (как в VBA «ЗаписатьЛистОшибок») ----------
 // Сотрудники из «Статистики», у которых соответствие в «Баллах»/«Стаже»
 // не найдено, найдено только по фамилии или неоднозначно (несколько вариантов)
+// фамилии равны? строго: точное совпадение ИЛИ общий корень ≥5 букв
+// с расхождением только в окончании (Федоров/Федоровна, Ильина/Ильин).
+// «Иванова» и «Иванько» (корень 4) — РАЗНЫЕ фамилии
 function famEq(a, b) {
   const ka = normalizeFIO(a), kb = normalizeFIO(b);
-  return !!ka && !!kb && wordEq(ka.split(' ')[0], kb.split(' ')[0]);
+  if (!ka || !kb) return false;
+  const fa = ka.split(' ')[0], fb = kb.split(' ')[0];
+  if (fa === fb) return true;
+  let p = 0;
+  while (p < fa.length && p < fb.length && fa[p] === fb[p]) p++;
+  return p >= 5 && (fa.length - p) <= 3 && (fb.length - p) <= 3;
+}
+// могла ли запись быть тем же человеком (когда точного совпадения нет):
+//  • у записи из источника только фамилия — кандидат (как в VBA «только по фамилии»);
+//  • у записи есть имя — оно должно совпадать с именем из «Статистики»
+//    («Иванова Анастасия» — НЕ вариант для «Иванова Надежда»);
+//  • у сотрудника из «Статистики» только фамилия — любой однофамилец кандидат
+function maybeSamePerson(recFio, statsFio) {
+  if (!famEq(recFio, statsFio)) return false;
+  const ks = normalizeFIO(statsFio);
+  if (!ks.includes(' ')) return true;            // «Кузнецова» — все однофамильцы кандидаты
+  const kr = normalizeFIO(recFio);
+  if (!kr.includes(' ')) return true;            // запись без имени — «Файзулина»
+  const ns = ks.split(' ')[1], nr = kr.split(' ')[1];
+  // инициал («Н» в «Иванова Н.С.») совпадает по первой букве имени
+  if (ns.length === 1 || nr.length === 1) return ns[0] === nr[0];
+  return wordEq(ns, nr);
 }
 function buildErrors() {
   const out = [];
@@ -1751,14 +1775,14 @@ function buildErrors() {
     seen.get(k).push(st.id);
     // «Баллы»
     const fullB = db.points.filter(p => fioMatch(fio, p.vals[0]));
-    const famB = fullB.length ? [] : db.points.filter(p => famEq(fio, p.vals[0]));
+    const famB = fullB.length ? [] : db.points.filter(p => maybeSamePerson(p.vals[0], fio));
     if (!fullB.length && !famB.length) problems.push('Баллы: не найдено');
     else if (!fullB.length && famB.length) problems.push('Баллы: только по фамилии → ' + famB.slice(0, 3).map(p => cleanName(p.vals[0])).join(' / '));
     else if (fullB.length > 1) problems.push('Баллы: несколько совпадений (' + fullB.length + ')');
     // «Стаж» — справочник: ОТСУТСТВИЕ в стаже не ошибка (аутсорс, новенький),
     // ошибкой считаем только неоднозначность
     const fullS = db.staff.filter(s => fioMatch(fio, s.fio));
-    const famS = fullS.length ? [] : db.staff.filter(s => famEq(fio, s.fio));
+    const famS = fullS.length ? [] : db.staff.filter(s => maybeSamePerson(s.fio, fio));
     if (fullS.length > 1) problems.push('Стаж: несколько совпадений (' + fullS.length + ')');
     else if (fullS.length === 0 && famS.length) problems.push('Стаж: только по фамилии → ' + famS.slice(0, 3).map(s => cleanName(s.fio)).join(' / '));
     if (problems.length) out.push({ fio, row: st.id, problems });
@@ -2837,7 +2861,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.6';
+const APP_VERSION = '2.7';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
