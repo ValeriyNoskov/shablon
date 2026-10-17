@@ -1167,11 +1167,16 @@ function buildSolutionRows(d) {
 }
 
 // ---------- обновление шаблона ----------
+// ВАЖНО: при слиянии ИМЯ перезаписывается из свежих данных — в новом файле
+// может появиться компания («Куванова Анастасия» → «Куванова Анастасия РЕСУРС»),
+// по ней строятся книги компаний. Совпадение людей — по табномеру или ключу
+// имени (компании в ключе не участвуют)
 function updateTemplateFromSolution(d) {
   const matched = new Set();
   let n = 0;
   for (const e of d.employees) {
     const td = tabDigits(e.tab);
+    const ek = normalizeFIO(e.fio);
     let row = null, last = null;
     if (td) {
       for (const si of d.solution) {
@@ -1183,7 +1188,8 @@ function updateTemplateFromSolution(d) {
     }
     if (!row) {
       for (const si of d.solution) {
-        if (cleanName(si.fio).toLowerCase() === cleanName(e.fio).toLowerCase()) {
+        const sk = normalizeFIO(si.fio);
+        if (sk && ek && sk === ek) {
           last = si;
           if (si.match !== 'не найдено' && si.total) row = si;
         }
@@ -1193,9 +1199,12 @@ function updateTemplateFromSolution(d) {
     if (!row) continue;
     if (td) d.solution.forEach((si, i) => { if (tabDigits(si.num) === td) matched.add(i); });
     d.solution.forEach((si, i) => {
-      if (cleanName(si.fio).toLowerCase() === cleanName(e.fio).toLowerCase()) matched.add(i);
+      const sk = normalizeFIO(si.fio);
+      if (sk && ek && sk === ek) matched.add(i);
     });
     let changed = false;
+    const nf = cleanName(row.fio);
+    if (nf && nf !== e.fio) { e.fio = nf; changed = true; }
     if (row.lines && row.lines !== e.lines) { e.lines = row.lines; changed = true; }
     if (row.errors && row.errors !== e.errors) { e.errors = row.errors; changed = true; }
     if (row.total && row.total !== e.total) { e.total = row.total; changed = true; }
@@ -1229,6 +1238,9 @@ function updateTemplateFromStats(d) {
     if (td) d.stats.forEach((s2, i) => { if (tabDigits(s2.num) === td) matched.add(i); });
     d.stats.forEach((s2, i) => { if (normalizeFIO(s2.fio) === normalizeFIO(e.fio)) matched.add(i); });
     let changed = false;
+    // имя тоже обновляем из свежих данных (компания могла появиться)
+    const nf = cleanName(st.fio);
+    if (nf && nf !== e.fio) { e.fio = nf; changed = true; }
     if (st.lines && st.lines !== e.lines) { e.lines = st.lines; changed = true; }
     if (st.errors && st.errors !== e.errors) { e.errors = st.errors; changed = true; }
     const [tot] = ballTotalFor(d, st.num, st.fio);
@@ -2825,7 +2837,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.5';
+const APP_VERSION = '2.6';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
