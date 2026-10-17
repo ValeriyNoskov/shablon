@@ -2335,6 +2335,17 @@ async function saveReport() {
   XLSX.utils.book_append_sheet(wb, ws, sheet);
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const fname = 'Отчет ' + date + '.xlsx';
+  // подсказка для iOS: файл выдаётся через меню «Поделиться» — нужно выбрать «Сохранить в Файлы»
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const HINT_KEY = 'shablon-hint-share-v1';
+  if (isIOS && !localStorage.getItem(HINT_KEY)) {
+    const go = await dlg('Как сохранить файл',
+      'Сейчас откроется меню «Поделиться».\n\nВыберите в нём «Сохранить в Файлы» —\nфайл появится в приложении «Файлы» (синяя папка).\n\nВажно: не выбирайте «Добавить в закладки» —\nсохранится ссылка, а не файл.',
+      'Открыть меню');
+    if (!go) return;
+    localStorage.setItem(HINT_KEY, '1');
+  }
   shareOrDownload(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
   toast('✓ Отчёт «' + sheet + '» (' + db.employees.length + ' сотрудников) — сохраните файл через меню');
 }
