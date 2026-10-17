@@ -399,15 +399,15 @@
         <table class="xl-params-table">
           <tr>
             <td class="xl-green lbl">Норма баллов в час</td>
-            <td class="xl-green val"><input id="pNormHour" type="number" step="any"></td>
+            <td class="xl-green val"><input id="pNormHour" type="number" step="any" inputmode="decimal"></td>
           </tr>
           <tr>
             <td class="xl-green lbl">Часы подбора</td>
-            <td class="xl-green val"><input id="pHours" type="number" step="any"></td>
+            <td class="xl-green val"><input id="pHours" type="number" step="any" inputmode="decimal"></td>
           </tr>
           <tr>
             <td class="xl-green lbl">Норма баллов в смену</td>
-            <td class="xl-green val"><input id="pNormShift" type="number" step="any" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
+            <td class="xl-green val"><input id="pNormShift" type="number" step="any" inputmode="decimal" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
           </tr>
         </table>
       </div>
@@ -474,16 +474,16 @@
           <tr>
             <td class="xl-title" rowspan="3">ШАБЛОН</td>
             <td class="xl-green lbl">Норма баллов в час</td>
-            <td class="xl-green val"><input id="sNormHour" type="number" step="any"></td>
+            <td class="xl-green val"><input id="sNormHour" type="number" step="any" inputmode="decimal"></td>
             <td class="xl-date" rowspan="3" style="min-width:150px"><label>Дата</label><input id="sDate" type="text" placeholder="ДД.ММ.ГГГГ" readonly style="cursor:pointer"><button class="btn" id="btnYdayS" title="Поставить вчерашнюю дату">⏮ Вчера</button></td>
           </tr>
           <tr>
             <td class="xl-green lbl">Часы подбора</td>
-            <td class="xl-green val"><input id="sHours" type="number" step="any"></td>
+            <td class="xl-green val"><input id="sHours" type="number" step="any" inputmode="decimal"></td>
           </tr>
           <tr>
             <td class="xl-green lbl">Норма баллов в смену</td>
-            <td class="xl-green val"><input id="sNormShift" type="number" step="any" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
+            <td class="xl-green val"><input id="sNormShift" type="number" step="any" inputmode="decimal" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
           </tr>
         </table>
       </div>
@@ -685,9 +685,9 @@
       <div class="field"><label>Этаж / Табномер</label><input id="mTab"></div>
       <div class="field"><label>Сотрудник (ФИО)</label><input id="mFio" class="wide" list="fioList"></div>
       <datalist id="fioList"></datalist>
-      <div class="field"><label>Строчки</label><input id="mLines" type="number" step="any"></div>
-      <div class="field"><label>Ошибки</label><input id="mErrors" type="number" step="any"></div>
-      <div class="field"><label>Всего баллы</label><input id="mTotal" type="number" step="any"></div>
+      <div class="field"><label>Строчки</label><input id="mLines" type="number" step="any" inputmode="decimal"></div>
+      <div class="field"><label>Ошибки</label><input id="mErrors" type="number" step="any" inputmode="decimal"></div>
+      <div class="field"><label>Всего баллы</label><input id="mTotal" type="number" step="any" inputmode="decimal"></div>
       <div class="field"><label>Коментарии</label><input id="mComment" class="wide"></div>
       <div class="field"><label>Категория</label>
         <select id="mCategory">
@@ -2921,7 +2921,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.9';
+const APP_VERSION = '3.0';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
