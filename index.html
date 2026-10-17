@@ -1,0 +1,2434 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Шаблон выгрузки</title>
+<!-- PWA для iPhone: полностью автономное приложение, данные — в localStorage (в самом iPhone) -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Шаблон">
+<meta name="theme-color" content="#2158a8">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --border: #d9dee6;
+    --accent: #1a5fb4; --accent2: #2f7de1;
+    --text: #24292f; --muted: #6b7280;
+    --green: #1a7f37; --red: #c62828; --amber: #b45309;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font: 13px/1.45 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: grid; user-select: none;
+    grid-template-columns: 200px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100%;
+    padding-top: env(safe-area-inset-top);
+  }
+  /* ---------- Шапка ---------- */
+  header {
+    grid-column: 1 / -1;
+    background: linear-gradient(180deg, #2158a8, #1a4a8f);
+    color: #fff; padding: 8px 16px;
+    display: flex; align-items: center; gap: 12px; flex: none;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; white-space: nowrap; }
+  header .file { font-size: 11px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .save-dot { width: 8px; height: 8px; border-radius: 50%; background: #7bd88f; margin-left: auto; transition: background .3s; flex: none; }
+  .save-dot.saving { background: #f5c518; }
+  /* ---------- Вкладки ---------- */
+  nav {
+    display: flex; flex-direction: column; gap: 4px;
+    background: #dfe5ee; padding: 12px 8px; flex: none;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  nav button {
+    border: 1px solid transparent;
+    background: transparent; padding: 9px 14px; cursor: pointer;
+    border-radius: 6px; font-size: 13px; color: #4b5a6e;
+    text-align: left; width: 100%; white-space: nowrap;
+    transition: background .12s, color .12s, box-shadow .12s;
+  }
+  nav button:hover { background: #e8edf5; color: var(--text); }
+  nav button:active { background: #d8e2f0; }
+  nav button.alert { animation: blinkRed 1s ease-in-out infinite; font-weight: 600; }
+  @keyframes blinkRed {
+    0%, 100% { background: #fdecea; color: #c0392b; box-shadow: inset 3px 0 0 #e74c3c; }
+    50%      { background: #e74c3c; color: #fff; box-shadow: inset 3px 0 0 #a93226; }
+  }
+  nav button:focus-visible { outline: 3px solid #a8c7ec; outline-offset: -1px; }
+  nav button.active {
+    background: #dbe9fb; color: var(--accent); font-weight: 600;
+    border-color: #b3cdf0;
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  /* ---------- Основное ---------- */
+  main { grid-column: 2; overflow: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .panel h2 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .field input, .field select {
+    border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px;
+    font-size: 13px; background: #fff; width: 130px;
+  }
+  .field input:focus, .field select:focus { outline: 2px solid #bcd6f5; border-color: var(--accent2); }
+  .field input.wide { width: 260px; }
+  /* ---------- единый стиль таблиц ---------- */
+  table { border-collapse: collapse; width: 100%; user-select: text; }
+  table:not(.xl-params-table) th,
+  table:not(.xl-params-table) td { border: 1px solid #b7b7b7; padding: 5px 9px; font-size: 12.5px; }
+  table:not(.xl-params-table) thead th {
+    background: #92d050; color: #1f4e79; font-weight: 700;
+    border-color: #76b02e; position: sticky; top: 0; white-space: nowrap; text-align: left;
+  }
+  table:not(.xl-params-table) th[data-k] { cursor: pointer; }
+  table:not(.xl-params-table) tbody tr:nth-child(even) td { background: #f6f9f1; }
+  th .dir { font-size: 10px; color: var(--accent); }
+  td[contenteditable] { min-width: 60px; }
+  td[contenteditable]:focus { outline: 2px solid #bcd6f5; background: #fffbe8 !important; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .b-autsors { background: #e3f0fc; color: #1a5fb4; }
+  .b-new { background: #e6f6e9; color: var(--green); }
+  .b-lag { background: #fdeaea; color: var(--red); }
+  .b-part { background: #fdf3e0; color: var(--amber); }
+  .stazh-cell { white-space: nowrap; color: #4b5563; }
+  /* ---------- Кнопки ---------- */
+  .btn {
+    border: 1px solid #cfd8e4; background: #f4f7fb; color: #33475b;
+    border-radius: 7px; padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: background .12s, border-color .12s, box-shadow .12s, transform .05s;
+    font-family: inherit;
+  }
+  .btn:hover { background: #e9eef6; border-color: #b6c4d8; }
+  .btn:active { background: #dbe4f0; border-color: #9fb2cc; transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(30,50,80,.12); }
+  .btn:focus-visible { outline: 3px solid #a8c7ec; outline-offset: 1px; }
+  .btn.primary { background: #dbe9fb; border-color: #a8c7ec; color: #1a5fb4; }
+  .btn.primary:hover { background: #cbe0f8; border-color: #8fb8e6; }
+  .btn.primary:active { background: #b9d4f3; }
+  .btn.danger { background: #fcebeb; border-color: #efc3c3; color: #b03a3a; }
+  .btn.danger:hover { background: #f9dddd; border-color: #e5a8a8; }
+  .btn.mini { padding: 4px 10px; font-size: 11.5px; }
+  body.busy .btn, body.busy .cmd { opacity: .55; pointer-events: none; }
+  body.busy .modal-bg button { opacity: 1; pointer-events: auto; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+  .action {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    padding: 12px; border: 1px solid var(--border); border-left: 4px solid var(--border);
+    border-radius: 8px; background: #fff; cursor: pointer; text-align: left;
+    font: inherit; transition: border-color .15s, box-shadow .15s, transform .05s, background .15s;
+  }
+  .action .t { font-weight: 600; font-size: 13px; color: #24292f; }
+  .action .s { font-size: 11px; color: var(--muted); line-height: 1.3; }
+  .action:hover { background: #fafcfe; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .action:active { transform: translateY(1px); }
+  .action.a-blue   { border-left-color: #1a5fb4; } .action.a-blue .t   { color: #1a5fb4; }
+  .action.a-green  { border-left-color: #2e7d32; } .action.a-green .t  { color: #2e7d32; }
+  .action.a-purple { border-left-color: #6d4fc2; } .action.a-purple .t { color: #6d4fc2; }
+  .action.a-orange { border-left-color: #d97a00; } .action.a-orange .t { color: #d97a00; }
+  .action.a-teal   { border-left-color: #00838f; } .action.a-teal .t   { color: #00838f; }
+  .action.a-gray   { border-left-color: #8a94a0; }
+  .action.primary { background: #eaf1fb; border-color: #a8c7ec; border-left-width: 4px; }
+  .toolbar .spacer { flex: 1; }
+  #search, #searchPoints, #searchStats, #searchSolution, #searchStaff {
+    border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; width: 220px; font-size: 13px;
+  }
+  .count { color: var(--muted); font-size: 12px; }
+  /* ---------- Шапка в стиле листа «шаблон» Excel ---------- */
+  .xl-head { display: flex; gap: 16px; align-items: stretch; margin-bottom: 12px; flex-wrap: wrap; }
+  .xl-params {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px; flex: 1; min-width: 260px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .xl-params-table { border-collapse: separate; border-spacing: 4px; width: 100%; }
+  .xl-params-table td { padding: 0; }
+  .xl-title {
+    font-size: 17px; font-weight: 800; color: #1f4e79;
+    border-right: 3px solid #92d050; padding-right: 14px !important; padding-left: 6px;
+    letter-spacing: 1px; white-space: nowrap;
+  }
+  .xl-green { background: #92d050; border: 1px solid #76b02e; }
+  .xl-green.lbl { font-weight: 700; padding: 7px 12px; white-space: nowrap; }
+  .xl-green.val { width: 110px; }
+  .xl-green.val input {
+    width: 100%; height: 100%; border: none; background: #e8f5d0;
+    padding: 7px 10px; font-size: 13px; font-weight: 700; color: #1f4e79;
+  }
+  .xl-green.val input:focus { outline: 2px solid #5b9bd5; background: #fff; }
+  .xl-date { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
+  .xl-date label { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 2px; }
+  .xl-date input { border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; width: 130px; font-weight: 700; font-size: 15px; text-align: center; }
+  .xl-date input:focus { outline: 2px solid #5b9bd5; }
+  .xl-legend {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 16px; display: flex; flex-direction: column; gap: 5px;
+    font-size: 12.5px; justify-content: center; min-width: 150px;
+  }
+  .xl-legend .sw { display: inline-block; width: 13px; height: 13px; border-radius: 3px; margin-right: 7px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.15); }
+  /* раскраска строк по категории — как на листе Excel */
+  tr.c-autsors td { background: #00b0f0 !important; color: #08303f; }
+  tr.c-lag td     { background: #ff5252 !important; color: #3d0000; }
+  tr.c-new td     { background: #ffe066 !important; color: #4d3a00; }
+  tr.c-part td    { background: #ffb84d !important; color: #4d2b00; }
+  tr.c-autsors td[contenteditable]:focus,
+  tr.c-lag td[contenteditable]:focus,
+  tr.c-new td[contenteditable]:focus,
+  tr.c-part td[contenteditable]:focus { background: #fffbe8 !important; }
+  .cat-sel {
+    font-size: 11px; border: 1px solid rgba(0,0,0,.2); border-radius: 4px;
+    background: rgba(255,255,255,.85); padding: 2px 4px; max-width: 110px;
+  }
+  /* ---------- Модальное окно ---------- */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(20,30,50,.45);
+    display: none; align-items: center; justify-content: center; z-index: 50; padding: 12px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 10px; padding: 20px; width: 420px; max-width: 100%;
+    max-height: 90vh; overflow: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3);
+  }
+  .modal h3 { margin: 0 0 14px; }
+  .modal .row { flex-direction: column; gap: 10px; align-items: stretch; }
+  .modal .field input, .modal .field select { width: 100%; }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  #toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: #24292f; color: #fff; max-width: 92vw;
+    padding: 8px 16px; border-radius: 6px; font-size: 12.5px; opacity: 0;
+    transition: opacity .3s; pointer-events: none; z-index: 99; white-space: pre-line;
+  }
+  #toast.show { opacity: .95; }
+  /* ---------- Бар выполнения ---------- */
+  #pbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 4px;
+    background: transparent; z-index: 300; display: none; pointer-events: none;
+  }
+  #pbar .fill {
+    height: 100%; width: 32%; border-radius: 4px;
+    background: linear-gradient(90deg, #a8c7ec, #1a5fb4);
+    animation: pbar-slide 1.1s ease-in-out infinite;
+  }
+  @keyframes pbar-slide { 0% { margin-left: -32%; } 100% { margin-left: 100%; } }
+  #pbarLabel {
+    position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+    background: #eaf1fb; border: 1px solid #a8c7ec; color: #1a5fb4;
+    padding: 4px 14px; border-radius: 14px; font-size: 12px; font-weight: 600;
+    display: none; z-index: 300; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(26,95,180,.15);
+  }
+  .table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; }
+  /* ---------- Мобильная раскладка (iPhone) ---------- */
+  @media (max-width: 720px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    nav {
+      flex-direction: row; overflow-x: auto; overflow-y: hidden;
+      padding: 6px; gap: 6px; border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    nav button { width: auto; flex: none; padding: 8px 12px; }
+    nav button.alert { box-shadow: inset 0 3px 0 #e74c3c; }
+    nav button.active { box-shadow: inset 0 3px 0 var(--accent); }
+    main { grid-column: 1; padding: 8px; }
+    header { padding: 8px 12px; gap: 8px; }
+    header h1 { font-size: 14px; }
+    header .file { display: none; }
+    .actions { grid-template-columns: 1fr 1fr; }
+    .table-wrap { margin: 0 -4px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 Шаблон выгрузки</h1>
+  <span class="file" id="fileLabel"></span>
+  <span class="save-dot" id="saveDot" title="Сохранено в память iPhone"></span>
+</header>
+
+<nav>
+  <button data-tab="program" class="active">⚙ Программа</button>
+  <button data-tab="main">Шаблон</button>
+  <button data-tab="points">Баллы</button>
+  <button data-tab="stats">Статистика</button>
+  <button data-tab="solution">Решение</button>
+  <button data-tab="staff">Стаж (справочник)</button>
+  <button data-tab="settings">⚙ Настройка</button>
+  <button data-tab="checks" id="navChecks">🧪 Проверка</button>
+</nav>
+
+<main>
+  <!-- ======= Вкладка Программа ======= -->
+  <section id="tab-program">
+    <div class="panel" style="border-color:#a8c7ec; background:#f4f8fe">
+      <h2 style="color:#1a5fb4">⚡ Авто — полный цикл</h2>
+      <div class="actions" style="grid-template-columns:1fr">
+        <button class="action primary a-blue" id="cmdAuto" title="Загрузка Excel → сведение → шаблон">
+          <span class="t">⚡ Авто</span>
+          <span class="s">Excel (Баллы + Статистика обязательно) → сведение → шаблон</span>
+        </button>
+      </div>
+      <div class="hint">Ручные правки шаблона затираются — всё строится с нуля из загруженного.</div>
+    </div>
+    <div class="panel">
+      <h2>Ручные действия</h2>
+      <div class="actions">
+        <button class="action a-green" id="cmdImport">
+          <span class="t">📥 Загрузить из Excel</span>
+          <span class="s">Выбор листов; любой набор</span>
+        </button>
+        <button class="action a-purple" id="cmdSolution" title="Статистика + Баллы + Стаж → вкладка «Решение»">
+          <span class="t">⚙ Сформировать сведение</span>
+          <span class="s">Решение + пересборка шаблона</span>
+        </button>
+        <button class="action a-orange" id="cmdRefreshTpl" title="Удалить шаблон и пересобрать из свежего «Решения»">
+          <span class="t">⟳ Обновить шаблон</span>
+          <span class="s">С нуля + окраска по авто</span>
+        </button>
+        <button class="action a-teal" id="cmdReport" title="Отчёт в файл Excel (через меню «Поделиться»)">
+          <span class="t">💾 Отчёт в Excel</span>
+          <span class="s">Сохранить файл / Поделиться</span>
+        </button>
+        <button class="action a-gray" id="cmdAddEmp" title="Новая строка в шаблон">
+          <span class="t">＋ Добавить сотрудника</span>
+          <span class="s">Новая строка шаблона</span>
+        </button>
+      </div>
+      <div class="hint">Каждый шаг отдельно. JSON, сброс данных — в «⚙ Настройка».</div>
+    </div>
+    <div class="panel">
+      <h2>Настройки шаблона</h2>
+      <div class="xl-params" style="border:none;padding:0;box-shadow:none;background:transparent">
+        <table class="xl-params-table">
+          <tr>
+            <td class="xl-green lbl">Норма баллов в час</td>
+            <td class="xl-green val"><input id="pNormHour" type="number" step="any"></td>
+            <td class="xl-date" rowspan="3" style="min-width:150px"><label>Дата</label><input id="pDate" type="text" placeholder="ДД.ММ.ГГГГ" readonly style="cursor:pointer"><button class="btn" id="btnYdayP" title="Поставить вчерашнюю дату">⏮ Вчера</button></td>
+          </tr>
+          <tr>
+            <td class="xl-green lbl">Часы подбора</td>
+            <td class="xl-green val"><input id="pHours" type="number" step="any"></td>
+          </tr>
+          <tr>
+            <td class="xl-green lbl">Норма баллов в смену</td>
+            <td class="xl-green val"><input id="pNormShift" type="number" step="any" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
+          </tr>
+        </table>
+      </div>
+      <div class="hint">Норма в смену считается сама (норма в час × часы). Дата влияет на расчёт стажа и авто-категории.</div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Настройка ======= -->
+  <section id="tab-settings" style="display:none">
+    <div class="panel">
+      <h2>Данные</h2>
+      <div class="toolbar">
+        <button class="btn" id="cmdExportJson" title="Сохранить данные в файл">📤 Экспорт JSON</button>
+        <button class="btn" id="cmdImportJson" title="Загрузить данные из файла">📂 Импорт JSON</button>
+        <button class="btn" id="cmdExportCsv" title="Сведение «Решение» в CSV">📊 Экспорт CSV</button>
+        <button class="btn danger" id="cmdResetData" title="Удалить все правки и вернуться к встроенным данным">♻ Сброс к встроенным данным</button>
+      </div>
+      <div class="hint">
+        Все изменения автоматически сохраняются в память iPhone (localStorage) — интернет не нужен.<br>
+        <b>Важно:</b> раз в неделю-две делайте «📤 Экспорт JSON» — это резервная копия на случай очистки Safari.
+      </div>
+    </div>
+    <div class="panel">
+      <h2>О приложении</h2>
+      <div class="hint" style="font-size:12px; line-height:1.6">
+        Автономная версия настольной программы «Шаблон выгрузки» для iPhone/iPad.<br>
+        Работает офлайн; загрузка Excel — через SheetJS (загружается из сети один раз, потом из кэша).<br>
+        Отчёт «💾 Отчёт в Excel» создаёт файл .xlsx и открывает меню «Поделиться» — файл можно сохранить в «Файлы» или отправить в почту/мессенджер.
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Шаблон ======= -->
+  <section id="tab-main" style="display:none">
+    <div class="xl-head">
+      <div class="xl-params">
+        <table class="xl-params-table">
+          <tr>
+            <td class="xl-title" rowspan="3">ШАБЛОН</td>
+            <td class="xl-green lbl">Норма баллов в час</td>
+            <td class="xl-green val"><input id="sNormHour" type="number" step="any"></td>
+            <td class="xl-date" rowspan="3" style="min-width:150px"><label>Дата</label><input id="sDate" type="text" placeholder="ДД.ММ.ГГГГ" readonly style="cursor:pointer"><button class="btn" id="btnYdayS" title="Поставить вчерашнюю дату">⏮ Вчера</button></td>
+          </tr>
+          <tr>
+            <td class="xl-green lbl">Часы подбора</td>
+            <td class="xl-green val"><input id="sHours" type="number" step="any"></td>
+          </tr>
+          <tr>
+            <td class="xl-green lbl">Норма баллов в смену</td>
+            <td class="xl-green val"><input id="sNormShift" type="number" step="any" readonly title="Вычисляется автоматически: норма в час × часы подбора"></td>
+          </tr>
+        </table>
+      </div>
+      <div class="xl-legend">
+        <div><span class="sw" style="background:#ff5252"></span>отстающие <span style="color:var(--muted);font-size:10px">(авто: баллы &lt; нормы)</span></div>
+        <div><span class="sw" style="background:#ffe066"></span>новенькие <span style="color:var(--muted);font-size:10px">(авто: стаж &lt; 3 мес)</span></div>
+        <div><span class="sw" style="background:#00b0f0"></span>аутсорс <span style="color:var(--muted);font-size:10px">(авто: нет в справочнике «Стаж»)</span></div>
+        <div><span class="sw" style="background:#ffb84d"></span>подработка <span style="color:var(--muted);font-size:10px">(только вручную)</span></div>
+      </div>
+    </div>
+
+    <div class="panel xl-panel">
+      <div class="toolbar">
+        <button class="btn primary" id="btnAddEmp">+ Добавить сотрудника</button>
+        <button class="btn" id="btnRefreshTpl" title="Удалить шаблон и пересобрать из свежего «Решения»">⟳ Обновить шаблон</button>
+        <button class="btn" id="btnRecolor" title="Сбросить ручные категории — цвет по авто-правилам">🎨 Окрасить по авто</button>
+        <button class="btn" id="btnSaveReport" title="Отчёт в файл Excel">💾 Отчёт в Excel</button>
+        <input id="search" placeholder="🔍 Поиск по ФИО / табномеру...">
+        <span class="spacer"></span>
+        <span class="count" id="empCount"></span>
+      </div>
+      <div class="table-wrap">
+      <table id="empTable" class="xl-table">
+        <thead>
+          <tr class="xl-green-row">
+            <th>№</th>
+            <th data-k="tab">Этаж</th>
+            <th data-k="fio">Сотрудник</th>
+            <th data-k="lines" class="num">Строчки</th>
+            <th data-k="errors" class="num">Ошибки</th>
+            <th data-k="total" class="num">Всего баллы <span class="dir">▼</span></th>
+            <th data-k="comment">Коментарии</th>
+            <th data-k="stazh">Стаж работы</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      </div>
+      <div class="hint">Клик по ячейке — редактирование. Стаж подставляется из справочника по ФИО (если не задан вручную). Категория строки задаёт раскраску как в Excel. Изменения сохраняются в память iPhone автоматически.</div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Баллы ======= -->
+  <section id="tab-points" style="display:none">
+    <div class="panel">
+      <h2>Справочник «Баллы» — выгрузка WMS</h2>
+      <div class="toolbar">
+        <input id="searchPoints" placeholder="🔍 Поиск по ФИО / табномеру...">
+        <span class="spacer"></span>
+        <span class="count" id="pointsCount"></span>
+      </div>
+      <div class="table-wrap" style="max-height: 70vh;">
+      <table id="pointsTable">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th data-k="0">Ф.И.О.</th>
+            <th data-k="1">Табномер</th>
+            <th data-k="2" class="num">Секунды</th>
+            <th data-k="3" class="num">Часы</th>
+            <th data-k="4" class="num">Пок. 5</th>
+            <th data-k="5" class="num">Пок. 6</th>
+            <th data-k="6" class="num">Пок. 7</th>
+            <th data-k="7" class="num">Пок. 8</th>
+            <th data-k="8" class="num">Пок. 9</th>
+            <th data-k="9" class="num">Пок. 10</th>
+            <th data-k="10" class="num">Итого отбор</th>
+            <th data-k="11" class="num">Оп. 12</th>
+            <th data-k="12" class="num">Оп. 13</th>
+            <th data-k="13" class="num">Оп. 14</th>
+            <th data-k="14" class="num">Оп. 15</th>
+            <th data-k="15" class="num">Оп. 16</th>
+            <th data-k="16" class="num">Оп. 17</th>
+            <th data-k="17" class="num">Оп. 18</th>
+            <th data-k="18" class="num">Оп. 19</th>
+            <th data-k="19" class="num">Оп. 20</th>
+            <th data-k="20" class="num">Всего баллы</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      </div>
+      <div class="hint">Колонка «Всего баллы» (последняя) используется при сведении. Загрузка из Excel заменяет содержимое справочника.</div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Статистика ======= -->
+  <section id="tab-stats" style="display:none">
+    <div class="panel">
+      <h2>Статистика</h2>
+      <div class="toolbar">
+        <input id="searchStats" placeholder="🔍 Поиск по ФИО / номеру...">
+        <button class="btn" id="btnAddStat">+ Добавить строку</button>
+        <span class="spacer"></span>
+        <span class="count" id="statsCount"></span>
+      </div>
+      <div class="table-wrap">
+      <table id="statsTable">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th data-k="num">Номер <span class="dir"></span></th>
+            <th data-k="fio">Сотрудник <span class="dir"></span></th>
+            <th data-k="lines" class="num">Шт:Стр <span class="dir"></span></th>
+            <th data-k="errors" class="num">ШТ:Ошибки <span class="dir"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Решение ======= -->
+  <section id="tab-solution" style="display:none">
+    <div class="panel">
+      <h2>Решение — сведение: Статистика + Баллы + Стаж</h2>
+      <div class="toolbar">
+        <input id="searchSolution" placeholder="🔍 Поиск по ФИО / номеру...">
+        <span class="spacer"></span>
+        <span class="count" id="solutionCount"></span>
+      </div>
+      <div class="table-wrap">
+      <table id="solutionTable">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Номер</th>
+            <th>Сотрудник</th>
+            <th class="num">Шт:Стр</th>
+            <th class="num">ШТ:Ошибки</th>
+            <th class="num">Всего баллы</th>
+            <th>Дата приема</th>
+            <th>Дата</th>
+            <th>Стаж работы</th>
+            <th>Сопоставление</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      </div>
+      <div class="hint">Сведение сопоставляет: строчки и ошибки — из «Статистики», «Всего баллы» — из справочника «Баллы» (по табномеру, затем по ФИО), дату приема — из справочника «Стаж». Стаж считается на дату из параметров.</div>
+    </div>
+  </section>
+
+  <!-- ======= Вкладка Стаж ======= -->
+  <section id="tab-staff" style="display:none">
+    <div class="panel">
+      <h2>Справочник: дата приема на работу</h2>
+      <div class="toolbar">
+        <input id="searchStaff" placeholder="🔍 Поиск по ФИО / табномеру...">
+        <button class="btn primary" id="btnAddStaff">+ Добавить запись</button>
+        <span class="spacer"></span>
+        <span class="count" id="staffCount"></span>
+      </div>
+      <div class="table-wrap">
+      <table id="staffTable">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th data-k="fio">Ф.И.О. <span class="dir"></span></th>
+            <th data-k="tab">Табномер <span class="dir"></span></th>
+            <th data-k="hired">Дата приема на работу <span class="dir"></span></th>
+            <th>Стаж</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-checks" style="display:none">
+    <div class="panel">
+      <h2>🧪 Проверка данных — дубли записей</h2>
+      <div class="hint" style="margin-bottom:8px">
+        Здесь показаны <b>дублирующиеся записи</b> во всех справочниках: «Шаблон», «Статистика», «Стаж» —
+        одинаковые табномеры или ФИО. Для каждой группы отметьте <b>верную строку</b> — остальные будут удалены.
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="btnCheckDups">🔄 Проверить дубли</button>
+        <span class="spacer"></span>
+        <span class="count" id="checksCount"></span>
+      </div>
+      <div id="checksList"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Модальное окно добавления сотрудника -->
+<div class="modal-bg" id="empModal">
+  <div class="modal">
+    <h3>Новый сотрудник</h3>
+    <div class="row">
+      <div class="field"><label>Этаж / Табномер</label><input id="mTab"></div>
+      <div class="field"><label>Сотрудник (ФИО)</label><input id="mFio" class="wide" list="fioList"></div>
+      <datalist id="fioList"></datalist>
+      <div class="field"><label>Строчки</label><input id="mLines" type="number" step="any"></div>
+      <div class="field"><label>Ошибки</label><input id="mErrors" type="number" step="any"></div>
+      <div class="field"><label>Всего баллы</label><input id="mTotal" type="number" step="any"></div>
+      <div class="field"><label>Коментарии</label><input id="mComment" class="wide"></div>
+      <div class="field"><label>Категория</label>
+        <select id="mCategory">
+          <option value="">— стаж по справочнику —</option>
+          <option>АУТСОРС</option>
+          <option>НОВЕНЬКИЕ</option>
+          <option>ОТСТАЮЩИЕ</option>
+          <option>ПОДРАБОТКА</option>
+        </select>
+      </div>
+      <div class="field"><label>Стаж (вручную)</label><input id="mStazh" placeholder="напр. 2 г., 10 мес. 4 д."></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="mCancelEmp">Отмена</button>
+      <button class="btn primary" id="mSaveEmp">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно добавления в справочник -->
+<div class="modal-bg" id="staffModal">
+  <div class="modal">
+    <h3>Новая запись справочника</h3>
+    <div class="row">
+      <div class="field"><label>Ф.И.О.</label><input id="msFio" class="wide"></div>
+      <div class="field"><label>Табномер</label><input id="msTab"></div>
+      <div class="field"><label>Дата приема (ДД.ММ.ГГГГ)</label><input id="msHired" placeholder="05.10.2023" title="Печатайте цифры — точки поставятся сами, или кликните для календаря"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="mCancelStaff">Отмена</button>
+      <button class="btn primary" id="mSaveStaff">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно выбора данных для загрузки -->
+<div class="modal-bg" id="sheetModal">
+  <div class="modal" style="width:480px">
+    <h3>Что загрузить из файла?</h3>
+    <p id="sheetFileName" style="color:var(--muted);font-size:12px;margin:0 0 12px;word-break:break-all"></p>
+    <div id="sheetList" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="actions">
+      <button class="btn" id="mCancelSheets">Отмена</button>
+      <button class="btn primary" id="mLoadSheets">Загрузить выбранное</button>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка разбора дублей в потоке «⚡ Авто» -->
+<div class="modal-bg" id="dupModal">
+  <div class="modal" style="width:600px; max-height:85vh;">
+    <h3 style="color:#c0392b">⚠ В файле есть дубли</h3>
+    <p class="hint" style="margin-top:0">Для каждой группы отметьте <b>верную строку</b> — остальные будут удалены. «Продолжить» станет активным, когда дублей не останется.</p>
+    <div id="dupModalList"></div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" id="mDupCancel">Отмена</button>
+      <button class="btn primary" id="mDupContinue" disabled>✓ Дубли устранены — продолжить ⚡ Авто</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="pbar"><div class="fill"></div></div>
+<div id="pbarLabel"></div>
+
+<!-- Календарь для поля «Дата» -->
+<div id="calPopup" style="display:none;position:fixed;z-index:200;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:10px;width:252px;user-select:none"></div>
+
+<!-- Универсальная модалка подтверждения/сообщения -->
+<div class="modal-bg" id="dlgModal">
+  <div class="modal" style="width:440px">
+    <h3 id="dlgTitle">Подтверждение</h3>
+    <p id="dlgMsg" style="white-space:pre-line;line-height:1.5"></p>
+    <div class="actions">
+      <button class="btn" id="dlgCancel">Отмена</button>
+      <button class="btn primary" id="dlgOk">ОК</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json" style="display:none">
+<script src="data.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+'use strict';
+
+// ==================== ХРАНЕНИЕ (localStorage вместо data.json) ====================
+const LS_KEY = 'shablon-vygruzki-db-v1';
+let saveTimer = null;
+
+function loadDB() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && d.settings && Array.isArray(d.employees)) return d;
+    }
+  } catch (e) { console.warn('localStorage не прочитан:', e); }
+  return JSON.parse(JSON.stringify(window.DEFAULT_DB));
+}
+
+function markSaving() { $('#saveDot').classList.add('saving'); }
+function saved() { $('#saveDot').classList.remove('saving'); }
+function persist() {
+  markSaving();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+    catch (e) { alert('Не удалось сохранить данные: ' + e.message); }
+    saved();
+  }, 400);
+}
+
+// ==================== ДИАЛОГИ (alert не работает в WKWebView/standalone) ====================
+window.alert = msg => dlg('Уведомление', String(msg));
+function dlg(title, msg, okText, cancelText) {
+  return new Promise(resolve => {
+    $('#dlgTitle').textContent = title;
+    $('#dlgMsg').textContent = msg;
+    $('#dlgOk').textContent = okText || 'ОК';
+    const m = $('#dlgModal');
+    const cancelBtn = $('#dlgCancel');
+    cancelBtn.style.display = cancelText === null ? 'none' : '';
+    cancelBtn.textContent = cancelText || 'Отмена';
+    m.classList.add('show');
+    const done = v => {
+      m.classList.remove('show');
+      $('#dlgOk').onclick = $('#dlgCancel').onclick = null;
+      resolve(v);
+    };
+    $('#dlgOk').onclick = () => done(true);
+    cancelBtn.onclick = () => done(false);
+  });
+}
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+let busyCount = 0;
+function busyOn(label) {
+  busyCount++;
+  $('#pbar').style.display = 'block';
+  const lb = $('#pbarLabel');
+  lb.textContent = '⏳ ' + label + '…';
+  lb.style.display = 'block';
+  document.body.classList.add('busy');
+}
+function busyOff() {
+  busyCount = Math.max(0, busyCount - 1);
+  if (!busyCount) {
+    $('#pbar').style.display = 'none';
+    $('#pbarLabel').style.display = 'none';
+    document.body.classList.remove('busy');
+  }
+}
+async function withBusy(label, fn) {
+  busyOn(label);
+  try { return await fn(); }
+  finally { busyOff(); }
+}
+
+// ==================== ПОРТИРОВАННАЯ ЛОГИКА (из main.go / import_excel.go / checks.go) ====================
+
+// tabDigits — цифровая часть табномера (URTN000070341 -> 0000070341 -> 70341)
+function tabDigits(s) {
+  return String(s ?? '').replace(/[^0-9]/g, '').replace(/^0+/, '');
+}
+
+// normalizeFIO — латинские буквы -> похожие кириллические, служебные слова — долой
+const LATIN_CYR = { 'c':'с','a':'а','e':'е','o':'о','p':'р','x':'х','y':'у','k':'к','m':'м','t':'т','b':'в','h':'н','3':'з','0':'о' };
+function normalizeFIO(s) {
+  let t = String(s ?? '').toLowerCase().trim();
+  t = t.replace(/[caeopxykmtbh30]/g, ch => LATIN_CYR[ch] || ch);
+  t = t.replace(/[ё_.,\-]/g, ' ');
+  const stop = new Set(['ас', 'профсервис', 'ресурс', 'аутсорс', 'нс', 'аутсорсинг']);
+  return t.split(/\s+/).filter(w => w && !stop.has(w)).join(' ');
+}
+
+// cleanName — имя без служебных дополнений (с сохранением регистра)
+function cleanName(s) {
+  const words = String(s ?? '').replace(/[_.,"]/g, ' ').split(/\s+/);
+  const stop = new Set(['ас', 'профсервис', 'ресурс', 'аутсорс', 'нс', 'аутсорсинг']);
+  return words.filter(w => w && !stop.has(w.toLowerCase())).join(' ');
+}
+
+// lev — расстояние Левенштейна
+function lev(a, b) {
+  const ra = [...a], rb = [...b], lb = rb.length;
+  let prev = [], cur = [];
+  for (let j = 0; j <= lb; j++) prev[j] = j;
+  for (let i = 1; i <= ra.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= lb; j++) {
+      const cost = ra[i - 1] === rb[j - 1] ? 0 : 1;
+      let m = cur[j - 1] + 1;
+      if (prev[j] + 1 < m) m = prev[j] + 1;
+      if (prev[j - 1] + cost < m) m = prev[j - 1] + cost;
+      cur[j] = m;
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[lb];
+}
+
+// wordEq — слово ФИО: точное, корень+окончание, опечатка в 1 букву
+function wordEq(a, b) {
+  if (a === b) return true;
+  const ra = [...a], rb = [...b];
+  const la = ra.length, lb = rb.length;
+  if (la >= 5 && lb >= 5 && lev(a, b) <= 1) return true;
+  let p = 0;
+  while (p < la && p < lb && ra[p] === rb[p]) p++;
+  if (p >= 4 && la - p <= 3 && lb - p <= 3) return true;
+  if (p >= 3 && la >= 4 && lb >= 4 && la - p <= 2 && lb - p <= 2) return true;
+  return false;
+}
+
+// fioMatch — нечёткое сопоставление ФИО (фамилия обязана совпасть)
+function fioMatch(a, b) {
+  const na = normalizeFIO(a), nb = normalizeFIO(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = na.split(' '), wb = nb.split(' ');
+  if (!wordEq(wa[0], wb[0])) return false;
+  const ra = wa.length > 1 ? wa.slice(1) : [];
+  const rb = wb.length > 1 ? wb.slice(1) : [];
+  if (!ra.length || !rb.length) return true;
+  for (const x of ra) for (const y of rb) if (wordEq(x, y)) return true;
+  return false;
+}
+
+// ---------- даты ----------
+function parseRuDate(s) {
+  const t = String(s ?? '').trim();
+  // excel serial (дней с 1899-12-30)
+  if (/^\d+$/.test(t)) {
+    const n = +t;
+    if (n >= 20000 && n <= 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30));
+      d.setUTCDate(d.getUTCDate() + n);
+      return d;
+    }
+    return null;
+  }
+  let m = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/.exec(t);
+  let us = false;
+  if (!m) { m = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/.exec(t); us = true; }
+  if (!m) return null;
+  let a = +m[1], b = +m[2], yr = +m[3];
+  if (yr < 100) yr += 2000;
+  const day = us ? b : a, mon = us ? a : b;
+  if (day > 31 || mon > 12 || mon < 1 || day < 1) return null;
+  return new Date(Date.UTC(yr, mon - 1, day));
+}
+function daysInMonth(mon, year) {
+  if (mon === 12) return 31;
+  return new Date(Date.UTC(year, mon, 0)).getUTCDate();
+}
+// stazhText — «N г., M мес. D д.» между hired и until (как в Go stazhText)
+function stazhText(hired, until) {
+  const h = parseRuDate(hired), u = parseRuDate(until);
+  if (!h || !u || u < h) return '';
+  let y = u.getUTCFullYear() - h.getUTCFullYear();
+  let m = u.getUTCMonth() - h.getUTCMonth();
+  let d = u.getUTCDate() - h.getUTCDate();
+  if (d < 0) { m--; d += daysInMonth(u.getUTCMonth() + 1, u.getUTCFullYear()); }
+  if (m < 0) { y--; m += 12; }
+  const parts = [];
+  if (y > 0) parts.push(y + ' г.,');
+  parts.push(m + ' мес.');
+  parts.push(d + ' д.');
+  return parts.join(' ');
+}
+
+// ---------- числовые значения ----------
+const RE_FLOAT = /^-?\d+\.\d+$/;
+function normFloat(t) {
+  if (!RE_FLOAT.test(t)) return t;
+  const f = parseFloat(t);
+  return String(Math.round(f));
+}
+function cellString(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') {
+    const r = Math.round(v);
+    return String(r);
+  }
+  return normFloat(String(v).trim());
+}
+function numVal(s) {
+  const v = parseFloat(String(s ?? '').trim().replace(',', '.'));
+  return isNaN(v) ? 0 : v;
+}
+
+// ---------- нехорошие «даты» в числовых полях ----------
+const RE_BAD_DATE = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/;
+function looksLikeBadDate(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return false;
+  const m = RE_BAD_DATE.exec(t);
+  if (!m) return false;
+  let yr = +m[3];
+  if (m[3].length <= 2) yr = yr < 50 ? yr + 2000 : yr + 1900;
+  return yr <= 1910;
+}
+function fixBadDateVal(s) {
+  const t = String(s ?? '').trim();
+  if (!looksLikeBadDate(t)) return [s, false];
+  const m = RE_BAD_DATE.exec(t);
+  let day = +m[1], mon = +m[2], yr = +m[3];
+  if (yr < 100) yr = yr < 50 ? yr + 2000 : yr + 1900;
+  const ms = Date.UTC(yr, mon - 1, day) - Date.UTC(1899, 11, 30);
+  return [String(Math.round(ms / 86400000)), true];
+}
+function fixBadDatesInDB(d) {
+  let fixed = 0;
+  const fix = s => { const [v, ok] = fixBadDateVal(s); if (ok) fixed++; return v; };
+  for (const e of d.employees) { e.lines = fix(e.lines); e.errors = fix(e.errors); e.total = fix(e.total); }
+  for (const s of d.stats) { s.lines = fix(s.lines); s.errors = fix(s.errors); }
+  for (const p of d.points) for (let c = 2; c < p.vals.length; c++) p.vals[c] = fix(p.vals[c]);
+  return fixed;
+}
+function collectImportWarnings(d) {
+  const w = [];
+  const add = (where, field, val) => w.push(where + ' — «' + field + '»: ' + val);
+  for (const e of d.employees) {
+    if (looksLikeBadDate(e.lines)) add('Сотрудник ' + e.fio, 'Строчки', e.lines);
+    if (looksLikeBadDate(e.errors)) add('Сотрудник ' + e.fio, 'Ошибки', e.errors);
+    if (looksLikeBadDate(e.total)) add('Сотрудник ' + e.fio, 'Всего баллы', e.total);
+  }
+  for (const s of d.stats) {
+    if (looksLikeBadDate(s.lines)) add('Статистика №' + s.id + ' (' + s.fio + ')', 'Шт:Стр', s.lines);
+    if (looksLikeBadDate(s.errors)) add('Статистика №' + s.id + ' (' + s.fio + ')', 'ШТ:Ошибки', s.errors);
+  }
+  for (const p of d.points) {
+    for (let i = 2; i < p.vals.length; i++) {
+      if (looksLikeBadDate(p.vals[i]))
+        add('Баллы, строка №' + p.id + ' (' + (p.vals[0] || '') + '), колонка ' + (i + 1), 'число', p.vals[i]);
+    }
+  }
+  if (w.length > 15) w.splice(15, w.length - 15, '… и ещё ' + (w.length - 15) + ' таких значений');
+  return w;
+}
+
+// ---------- максимумы id ----------
+function maxID(arr) { let m = 0; for (const x of arr || []) if (x.id > m) m = x.id; return m; }
+
+// ---------- дубли ----------
+function personKey(num, fio) {
+  const td = tabDigits(num);
+  if (td) return 't:' + td;
+  const f = normalizeFIO(fio);
+  if (f) return 'f:' + f;
+  return '';
+}
+function findDuplicates(d) {
+  const out = [];
+  const shown = new Set();
+  const collect = (kind, keys) => {
+    for (const key of Object.keys(keys)) {
+      const rows = keys[key];
+      if (rows.length > 1) {
+        let sig = kind + ':' + rows.map(r => r.id).join(',');
+        if (shown.has(sig)) continue;
+        shown.add(sig);
+        out.push({ kind, key, rows });
+      }
+    }
+  };
+  const mapOf = (list, numF, fioF, extraF) => {
+    const byTab = {}, byFio = {};
+    for (const x of list) {
+      const row = { id: x.id, num: numF(x), fio: fioF(x), extra: extraF(x) };
+      const kt = personKey(row.num, '');
+      if (kt) (byTab[kt] = byTab[kt] || []).push(row);
+      const kf = personKey('', row.fio);
+      if (kf) (byFio[kf] = byFio[kf] || []).push(row);
+    }
+    return [byTab, byFio];
+  };
+  let m;
+  m = mapOf(d.employees, e => e.tab, e => e.fio, e => 'Строчки: ' + e.lines + ' · Баллы: ' + e.total);
+  collect('employees', m[0]); collect('employees', m[1]);
+  m = mapOf(d.stats, s => s.num, s => s.fio, s => 'Строчки: ' + s.lines + ' · Ошибки: ' + s.errors);
+  collect('stats', m[0]); collect('stats', m[1]);
+  m = mapOf(d.staff, p => p.tab, p => p.fio, p => 'Приём: ' + p.hired);
+  collect('staff', m[0]); collect('staff', m[1]);
+  return out;
+}
+function resolveDuplicate(d, kind, keepID, removeIDs) {
+  const remove = new Set(removeIDs.filter(id => id !== keepID));
+  let n = 0;
+  const filterArr = arr => arr.filter(x => { if (remove.has(x.id)) { n++; return false; } return true; });
+  if (kind === 'employees') d.employees = filterArr(d.employees);
+  else if (kind === 'stats') d.stats = filterArr(d.stats);
+  else if (kind === 'staff') d.staff = filterArr(d.staff);
+  return n;
+}
+function duplicateEmployees(d) {
+  const counts = {}, names = {};
+  for (const e of d.employees) {
+    let key = tabDigits(e.tab);
+    if (!key) key = 'fio:' + normalizeFIO(e.fio);
+    counts[key] = (counts[key] || 0) + 1;
+    names[key] = e.fio;
+  }
+  const res = [];
+  for (const key of Object.keys(counts)) if (counts[key] > 1) res.push(names[key] + ' (×' + counts[key] + ')');
+  return res;
+}
+
+// ---------- сведение «Решение» ----------
+function ballTotalFor(d, num, fio) {
+  const numD = tabDigits(num);
+  if (numD) {
+    for (const p of d.points) {
+      if (p.vals.length > 1 && tabDigits(p.vals[1]) === numD) return [p.vals[20], 'по табномеру'];
+    }
+  }
+  for (const p of d.points) {
+    if (p.vals.length > 0 && fioMatch(fio, p.vals[0])) return [p.vals[20], 'по ФИО'];
+  }
+  return ['', 'не найдено'];
+}
+function hiredFor(d, num, fio, date) {
+  const numD = tabDigits(num);
+  if (numD) {
+    for (const st of d.staff) {
+      if (tabDigits(st.tab) === numD) return [st.hired, stazhText(st.hired, date)];
+    }
+  }
+  for (const st of d.staff) {
+    if (fioMatch(fio, st.fio)) return [st.hired, stazhText(st.hired, date)];
+  }
+  for (const e of d.employees) {
+    if (fioMatch(fio, e.fio) && e.stazh) return ['', e.stazh];
+  }
+  return ['', ''];
+}
+function buildSolutionRows(d) {
+  const date = d.settings.date;
+  const out = [];
+  for (const st of d.stats) {
+    const [hired, stazh] = hiredFor(d, st.num, st.fio, date);
+    let [total, match] = ballTotalFor(d, st.num, st.fio);
+    if (match.startsWith('по ФИО')) {
+      // найти конкретную строку для показа имени
+      const numD = tabDigits(st.num);
+      let shown = false;
+      if (numD) {
+        for (const p of d.points) {
+          if (p.vals.length > 1 && tabDigits(p.vals[1]) === numD) { shown = true; break; }
+        }
+      }
+      if (!shown) {
+        for (const p of d.points) {
+          if (p.vals.length > 0 && fioMatch(st.fio, p.vals[0])) { match = 'по ФИО: ' + cleanName(p.vals[0]); break; }
+        }
+      }
+    }
+    out.push({
+      num: st.num, fio: cleanName(st.fio), lines: st.lines, errors: st.errors,
+      total, hired, date, stazh, match
+    });
+  }
+  return out;
+}
+
+// ---------- обновление шаблона ----------
+function updateTemplateFromSolution(d) {
+  const matched = new Set();
+  let n = 0;
+  for (const e of d.employees) {
+    const td = tabDigits(e.tab);
+    let row = null, last = null;
+    if (td) {
+      for (const si of d.solution) {
+        if (tabDigits(si.num) === td) {
+          last = si;
+          if (si.match !== 'не найдено' && si.total) row = si;
+        }
+      }
+    }
+    if (!row) {
+      for (const si of d.solution) {
+        if (cleanName(si.fio).toLowerCase() === cleanName(e.fio).toLowerCase()) {
+          last = si;
+          if (si.match !== 'не найдено' && si.total) row = si;
+        }
+      }
+    }
+    if (!row) row = last;
+    if (!row) continue;
+    if (td) d.solution.forEach((si, i) => { if (tabDigits(si.num) === td) matched.add(i); });
+    d.solution.forEach((si, i) => {
+      if (cleanName(si.fio).toLowerCase() === cleanName(e.fio).toLowerCase()) matched.add(i);
+    });
+    let changed = false;
+    if (row.lines && row.lines !== e.lines) { e.lines = row.lines; changed = true; }
+    if (row.errors && row.errors !== e.errors) { e.errors = row.errors; changed = true; }
+    if (row.total && row.total !== e.total) { e.total = row.total; changed = true; }
+    if (changed) n++;
+  }
+  d.solution.forEach((row, si) => {
+    if (matched.has(si)) return;
+    const fio = cleanName(row.fio);
+    if (!fio) return;
+    d.employees.push({ id: maxID(d.employees) + 1, tab: row.num, fio, lines: row.lines, errors: row.errors, total: row.total, comment: '', category: '', stazh: '' });
+    n++;
+  });
+  return n;
+}
+function updateTemplateFromStats(d) {
+  const byTab = {}, byFio = {};
+  for (const st of d.stats) {
+    const td = tabDigits(st.num);
+    if (td) byTab[td] = st;
+    const key = normalizeFIO(st.fio);
+    if (key) byFio[key] = st;
+  }
+  const matched = new Set();
+  let n = 0;
+  for (const e of d.employees) {
+    let st = null;
+    const td = tabDigits(e.tab);
+    if (td && byTab[td]) st = byTab[td];
+    if (!st) { const k = normalizeFIO(e.fio); if (k && byFio[k]) st = byFio[k]; }
+    if (!st) continue;
+    if (td) d.stats.forEach((s2, i) => { if (tabDigits(s2.num) === td) matched.add(i); });
+    d.stats.forEach((s2, i) => { if (normalizeFIO(s2.fio) === normalizeFIO(e.fio)) matched.add(i); });
+    let changed = false;
+    if (st.lines && st.lines !== e.lines) { e.lines = st.lines; changed = true; }
+    if (st.errors && st.errors !== e.errors) { e.errors = st.errors; changed = true; }
+    const [tot] = ballTotalFor(d, st.num, st.fio);
+    if (tot && tot !== e.total) { e.total = tot; changed = true; }
+    if (changed) n++;
+  }
+  d.stats.forEach((st, si) => {
+    if (matched.has(si)) return;
+    const fio = cleanName(st.fio);
+    if (!fio) return;
+    const ne = { id: maxID(d.employees) + 1, tab: st.num, fio, lines: st.lines, errors: st.errors, total: '', comment: '', category: '', stazh: '' };
+    const [tot] = ballTotalFor(d, st.num, fio);
+    if (tot) ne.total = tot;
+    d.employees.push(ne);
+  });
+  return n;
+}
+function rebuildTemplate(d) {
+  // ручные поля старого шаблона
+  const manual = {};
+  for (const e of d.employees) {
+    const m = { comment: e.comment, category: e.category, stazh: e.stazh };
+    const kt = personKey(e.tab, '');
+    if (kt) manual[kt] = m;
+    const kf = personKey('', e.fio);
+    if (kf) manual[kf] = m;
+  }
+  let rows, from;
+  if ((d.solution || []).length) {
+    rows = d.solution; from = 'из «Решения»';
+  } else {
+    rows = d.stats.map(st => {
+      const [tot] = ballTotalFor(d, st.num, st.fio);
+      return { num: st.num, fio: cleanName(st.fio), lines: st.lines, errors: st.errors, total: tot };
+    });
+    from = 'из «Статистики» + «Баллов» (сведение ещё не строилось)';
+  }
+  // схлопнуть дубли источника: строка с баллами имеет приоритет
+  const seen = {};
+  const final = [];
+  for (const r of rows) {
+    const fio = cleanName(r.fio);
+    if (!fio && !String(r.num || '').trim()) continue;
+    let key = personKey(r.num, fio);
+    if (!key) key = 'row:' + fio.toLowerCase() + '|' + String(r.num || '').trim();
+    if (key in seen) {
+      const i = seen[key];
+      if (r.total || !final[i].total) final[i] = r;
+      continue;
+    }
+    seen[key] = final.length;
+    final.push(r);
+  }
+  d.employees = [];
+  let nextID = 0;
+  for (const r of final) {
+    const e = { id: nextID + 1, tab: r.num, fio: cleanName(r.fio), lines: r.lines, errors: r.errors, total: r.total, comment: '', category: '', stazh: '' };
+    nextID = e.id;
+    const m = manual[personKey(e.tab, '')] || manual[personKey('', e.fio)];
+    if (m) { e.comment = m.comment; e.category = m.category; e.stazh = m.stazh; }
+    d.employees.push(e);
+  }
+  return [d.employees.length, from];
+}
+
+// ---------- справочник стажа: поиск ----------
+function staffFor(d, fio) {
+  for (const p of d.staff) if (fioMatch(p.fio, fio)) return p;
+  return null;
+}
+function staffContains(d, e) { return !!staffFor(d, e.fio); }
+function stazhFromStaff(d, e) {
+  const p = staffFor(d, e.fio);
+  return p ? stazhText(p.hired, d.settings.date) : '';
+}
+</script>
+<script>
+'use strict';
+let db = loadDB();
+let empSort = { k: 'total', dir: -1 };
+let staffSort = { k: null, dir: 1 };
+let statsSort = { k: null, dir: 1 };
+let dups = [];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- стаж в интерфейсе ----------
+function staffByFio(fio) {
+  return staffFor(db, fio);
+}
+function stazhBetween(hired, until) { return stazhText(hired, until); }
+function effStazh(e) {
+  if (e.stazh) return { text: e.stazh, cls: 'stazh-cell' };
+  const p = staffByFio(e.fio);
+  const st = p ? stazhBetween(p.hired, db.settings.date) : '';
+  return st ? { text: st, cls: 'stazh-cell' } : { text: '', cls: '' };
+}
+function catCls(c) {
+  return { 'АУТСОРС': 'b-autsors', 'НОВЕНЬКИЕ': 'b-new', 'ОТСТАЮЩИЕ': 'b-lag', 'ПОДРАБОТКА': 'b-part' }[c] || '';
+}
+
+// computeNormShift — норма в смену = норма в час × часы подбора
+function computeNormShift() {
+  const h = parseFloat(String(db.settings.normPerHour).replace(',', '.'));
+  const c = parseFloat(String(db.settings.pickingHours).replace(',', '.'));
+  if (!isNaN(h) && !isNaN(c)) {
+    const v = String(Math.round(h * c));
+    if (db.settings.normPerShift !== v) {
+      db.settings.normPerShift = v;
+      persist();
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------- рендер ----------
+function render() {
+  renderSettings();
+  renderEmployees();
+  renderStaff();
+  renderPoints();
+  renderStats();
+  renderSolution();
+  $('#fileLabel').textContent = 'сотрудников: ' + db.employees.length + ' · стаж: ' + db.staff.length;
+  const fl = $('#fioList');
+  fl.innerHTML = db.staff.map(p => `<option value="${esc(p.fio)}">`).join('');
+}
+
+function renderSettings() {
+  computeNormShift();
+  $('#sNormHour').value = db.settings.normPerHour;
+  $('#sHours').value = db.settings.pickingHours;
+  $('#sNormShift').value = db.settings.normPerShift;
+  $('#sDate').value = db.settings.date;
+  $('#pNormHour').value = db.settings.normPerHour;
+  $('#pHours').value = db.settings.pickingHours;
+  $('#pNormShift').value = db.settings.normPerShift;
+  $('#pDate').value = db.settings.date;
+}
+
+// синхронные копии полей «Программа» ↔ «Шаблон»
+function bindTwin(sel, key) {
+  $(sel).addEventListener('input', () => {
+    db.settings[key] = $(sel).value;
+    computeNormShift();
+    persist();
+    renderSettings();
+    renderEmployees();
+  });
+}
+[['#pNormHour', 'normPerHour'], ['#pHours', 'pickingHours'], ['#pDate', 'date']].forEach(([sel, key]) => bindTwin(sel, key));
+
+function filteredEmployees() {
+  const q = $('#search').value.toLowerCase().trim();
+  let list = db.employees.filter(e =>
+    !q || e.fio.toLowerCase().includes(q) || e.tab.toLowerCase().includes(q));
+  if (empSort.k) {
+    const k = empSort.k;
+    list = [...list].sort((a, b) => {
+      const va = parseFloat(String(a[k]).replace(',', '.')), vb = parseFloat(String(b[k]).replace(',', '.'));
+      const ea = isNaN(va), eb = isNaN(vb);
+      if (ea && eb) return String(a[k]).localeCompare(String(b[k]), 'ru');
+      if (ea) return 1;
+      if (eb) return -1;
+      return (va - vb) * empSort.dir;
+    });
+  }
+  return list;
+}
+
+const CAT_COLORS = { 'АУТСОРС': 'c-autsors', 'ОТСТАЮЩИЕ': 'c-lag', 'НОВЕНЬКИЕ': 'c-new', 'ПОДРАБОТКА': 'c-part' };
+
+// авто-категория: нет в «Стаже» -> АУТСОРС; стаж < 3 мес -> НОВЕНЬКИЕ; баллы < нормы -> ОТСТАЮЩИЕ
+function autoCat(e) {
+  if (e.category) return e.category;
+  const p = staffByFio(e.fio);
+  if (!p) return 'АУТСОРС';
+  const d = stazhBetween(p.hired, db.settings.date);
+  if (d && !d.includes('г.')) {
+    const m = /(\d+) мес/.exec(d);
+    if ((m ? +m[1] : 0) < 3) return 'НОВЕНЬКИЕ';
+  }
+  const norm = parseFloat(db.settings.normPerShift);
+  const t = parseFloat(String(e.total).replace(',', '.'));
+  if (e.lines !== '') {
+    if (e.total === '') return 'ОТСТАЮЩИЕ';
+    if (!isNaN(norm) && !isNaN(t) && t < norm) return 'ОТСТАЮЩИЕ';
+  }
+  return '';
+}
+
+function renderEmployees() {
+  const tb = $('#empTable tbody');
+  const list = filteredEmployees();
+  $('#empCount').textContent = `записей: ${list.length} из ${db.employees.length}`;
+  tb.innerHTML = list.map(e => {
+    const st = effStazh(e);
+    const cls = CAT_COLORS[e.category] || CAT_COLORS[autoCat(e)] || '';
+    return `<tr data-id="${e.id}" class="${cls}">
+      <td class="num" style="color:var(--muted)">${e.id}</td>
+      <td contenteditable="true" data-k="tab">${esc(e.tab)}</td>
+      <td contenteditable="true" data-k="fio">${esc(e.fio)}</td>
+      <td contenteditable="true" data-k="lines" class="num">${esc(e.lines)}</td>
+      <td contenteditable="true" data-k="errors" class="num">${esc(e.errors)}</td>
+      <td contenteditable="true" data-k="total" class="num">${esc(e.total)}</td>
+      <td contenteditable="true" data-k="comment">${esc(e.comment)}</td>
+      <td class="${st.cls}" data-stazh>${esc(st.text)}</td>
+      <td style="white-space:nowrap; min-width:96px">
+        <select class="cat-sel" data-cat="${e.id}" title="Категория: «— авто —» = цвет по правилам">
+          <option value="">— авто${autoCat(e) ? ': ' + autoCat(e) : ''} —</option>
+          <option${e.category==='АУТСОРС'?' selected':''}>АУТСОРС</option>
+          <option${e.category==='ОТСТАЮЩИЕ'?' selected':''}>ОТСТАЮЩИЕ</option>
+          <option${e.category==='НОВЕНЬКИЕ'?' selected':''}>НОВЕНЬКИЕ</option>
+          <option${e.category==='ПОДРАБОТКА'?' selected':''}>ПОДРАБОТКА</option>
+        </select>
+        <button class="btn danger mini" data-del="${e.id}" title="Удалить">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filteredStaff() {
+  const q = $('#searchStaff').value.toLowerCase().trim();
+  let list = db.staff.filter(p =>
+    !q || p.fio.toLowerCase().includes(q) || p.tab.toLowerCase().includes(q));
+  if (staffSort.k) {
+    const k = staffSort.k;
+    list = [...list].sort((a, b) => String(a[k]).localeCompare(String(b[k]), 'ru') * staffSort.dir);
+  }
+  return list;
+}
+function renderStaff() {
+  const tb = $('#staffTable tbody');
+  const list = filteredStaff();
+  $('#staffCount').textContent = 'записей: ' + list.length;
+  tb.innerHTML = list.map(p => `<tr data-id="${p.id}">
+      <td class="num" style="color:var(--muted)">${p.id}</td>
+      <td contenteditable="true" data-k="fio">${esc(p.fio)}</td>
+      <td contenteditable="true" data-k="tab">${esc(p.tab)}</td>
+      <td contenteditable="true" data-k="hired">${esc(p.hired)}</td>
+      <td class="stazh-cell">${esc(p.hired && stazhBetween(p.hired, db.settings.date))}</td>
+      <td><button class="btn danger mini" data-del-staff="${p.id}">✕</button></td>
+    </tr>`).join('');
+}
+
+// ---------- сортировка ----------
+function bindSort(tableSel, thSel, dirSel, getSort, setSort, rerender) {
+  document.querySelectorAll(tableSel + ' th[data-k]').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.k;
+      const cur = getSort();
+      setSort({ k, dir: cur.k === k ? -cur.dir : 1 });
+      document.querySelectorAll(tableSel + ' .dir').forEach(d => d.textContent = '');
+      const d = th.querySelector(dirSel);
+      if (d) d.textContent = getSort().dir > 0 ? '▲' : '▼';
+      rerender();
+    });
+  });
+}
+bindSort('#empTable', 'th[data-k]', '.dir', () => empSort, v => empSort = v, renderEmployees);
+bindSort('#staffTable', 'th[data-k]', '.dir', () => staffSort, v => staffSort = v, renderStaff);
+bindSort('#statsTable', 'th[data-k]', '.dir', () => statsSort, v => statsSort = v, renderStats);
+
+// ---------- инлайн-редактирование ----------
+$('#empTable').addEventListener('input', ev => {
+  const td = ev.target.closest('td[contenteditable]');
+  if (!td) return;
+  const id = +td.closest('tr').dataset.id;
+  const e = db.employees.find(x => x.id === id);
+  if (!e) return;
+  e[td.dataset.k] = td.textContent.trim();
+  persist();
+  const st = effStazh(e);
+  const stCell = td.closest('tr').querySelector('[data-stazh]');
+  if (stCell) { stCell.textContent = st.text; stCell.className = st.cls; }
+});
+$('#empTable').addEventListener('focusout', ev => {
+  if (ev.target.closest('td[contenteditable]')) renderEmployees();
+});
+$('#staffTable').addEventListener('input', ev => {
+  const td = ev.target.closest('td[contenteditable]');
+  if (!td) return;
+  const id = +td.closest('tr').dataset.id;
+  const p = db.staff.find(x => x.id === id);
+  if (!p) return;
+  p[td.dataset.k] = td.textContent.trim();
+  persist();
+});
+$('#staffTable').addEventListener('focusout', ev => {
+  if (ev.target.closest('td[contenteditable]')) renderStaff();
+});
+$('#empTable').addEventListener('change', ev => {
+  const sel = ev.target.closest('[data-cat]');
+  if (!sel) return;
+  const id = +sel.dataset.cat;
+  const e = db.employees.find(x => x.id === id);
+  if (!e) return;
+  e.category = sel.value;
+  persist();
+  renderEmployees();
+});
+
+// ---------- удаление ----------
+$('#empTable').addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-del]');
+  if (!btn) return;
+  const id = +btn.dataset.del;
+  const e = db.employees.find(x => x.id === id);
+  const ok = await dlg('Удаление', 'Удалить сотрудника: ' + (e ? e.fio : id) + '?', 'Удалить');
+  if (!ok) return;
+  db.employees = db.employees.filter(x => x.id !== id);
+  persist(); renderEmployees(); toast('Удалено');
+});
+$('#staffTable').addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-del-staff]');
+  if (!btn) return;
+  const id = +btn.dataset.delStaff;
+  const p = db.staff.find(x => x.id === id);
+  const ok = await dlg('Удаление', 'Удалить из справочника: ' + (p ? p.fio : id) + '?', 'Удалить');
+  if (!ok) return;
+  db.staff = db.staff.filter(x => x.id !== id);
+  persist(); renderStaff(); renderEmployees(); toast('Удалено');
+});
+
+// ---------- добавление ----------
+$('#btnAddEmp').onclick = () => { $('#empModal').classList.add('show'); };
+$('#mCancelEmp').onclick = () => $('#empModal').classList.remove('show');
+$('#mSaveEmp').onclick = () => {
+  const e = {
+    tab: $('#mTab').value.trim(), fio: $('#mFio').value.trim(),
+    lines: $('#mLines').value.trim(), errors: $('#mErrors').value.trim(),
+    total: $('#mTotal').value.trim(), comment: $('#mComment').value.trim(),
+    category: $('#mCategory').value, stazh: $('#mStazh').value.trim(),
+  };
+  if (!e.fio) { alert('Укажите ФИО сотрудника'); return; }
+  e.id = maxID(db.employees) + 1;
+  db.employees.push(e);
+  persist();
+  $('#empModal').classList.remove('show');
+  ['#mTab','#mFio','#mLines','#mErrors','#mTotal','#mComment','#mStazh'].forEach(s => $(s).value = '');
+  renderEmployees(); toast('Сотрудник добавлен');
+};
+$('#btnAddStaff').onclick = () => { $('#staffModal').classList.add('show'); };
+$('#mCancelStaff').onclick = () => $('#staffModal').classList.remove('show');
+$('#mSaveStaff').onclick = () => {
+  const p = { fio: $('#msFio').value.trim(), tab: $('#msTab').value.trim(), hired: $('#msHired').value.trim() };
+  if (!p.fio) { alert('Укажите Ф.И.О.'); return; }
+  p.id = maxID(db.staff) + 1;
+  db.staff.push(p);
+  persist();
+  $('#staffModal').classList.remove('show');
+  $('#msFio').value = $('#msTab').value = $('#msHired').value = '';
+  renderStaff(); renderEmployees(); toast('Запись добавлена');
+};
+
+// ---------- настройки на «Шаблоне» ----------
+['#sNormHour', '#sHours', '#sDate'].forEach((sel, i) => {
+  const map = ['normPerHour', 'pickingHours', 'date'];
+  $(sel).addEventListener('input', () => {
+    db.settings[map[i]] = $(sel).value;
+    const shiftChanged = computeNormShift();
+    persist();
+    if (shiftChanged) renderSettings();
+    renderEmployees();
+  });
+});
+
+// ---------- дата: календарь, «вчера», дата по умолчанию ----------
+function fmtRu(d) {
+  return String(d.getDate()).padStart(2, '0') + '.' +
+    String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+}
+function yesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d; }
+function setDate(v) {
+  db.settings.date = v;
+  persist();
+  renderSettings();
+  renderEmployees();
+}
+let calAnchor = null, calPick = null, calY = 0, calM = 0;
+const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function showCal(input, onPick) {
+  calAnchor = input;
+  calPick = onPick || null;
+  const cur = parseRuDate(input.value) || yesterday();
+  calY = cur.getFullYear(); calM = cur.getMonth();
+  const r = input.getBoundingClientRect();
+  const pop = $('#calPopup');
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 270)) + 'px';
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.display = 'block';
+  renderCal();
+}
+function renderCal() {
+  const sel = parseRuDate(calAnchor.value);
+  const first = new Date(calY, calM, 1);
+  const shift = (first.getDay() + 6) % 7;
+  const days = new Date(calY, calM + 1, 0).getDate();
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <button class="btn mini" id="calPrev">‹</button>
+    <b>${MONTHS[calM]} ${calY}</b>
+    <button class="btn mini" id="calNext">›</button>
+  </div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+  for (const wd of ['пн','вт','ср','чт','пт','сб','вс'])
+    html += `<span style="font-size:10px;color:var(--muted)">${wd}</span>`;
+  for (let i = 0; i < shift; i++) html += '<span></span>';
+  for (let d = 1; d <= days; d++) {
+    const ds = fmtRu(new Date(calY, calM, d));
+    const isSel = sel && sel.getFullYear() === calY && sel.getMonth() === calM && sel.getDate() === d;
+    html += `<button class="btn mini" data-cal="${ds}" style="${isSel ? 'background:var(--accent);border-color:var(--accent);color:#fff' : ''};padding:6px 0">${d}</button>`;
+  }
+  html += '</div><div style="margin-top:8px;text-align:center"><button class="btn mini" id="calYday">⏮ Вчера</button></div>';
+  const pop = $('#calPopup');
+  pop.innerHTML = html;
+  $('#calPrev').onclick = () => { calM--; if (calM < 0) { calM = 11; calY--; } renderCal(); };
+  $('#calNext').onclick = () => { calM++; if (calM > 11) { calM = 0; calY++; } renderCal(); };
+  const pick = ds => { (calPick || setDate)(ds); hideCal(); };
+  $('#calYday').onclick = () => pick(fmtRu(yesterday()));
+  pop.querySelectorAll('[data-cal]').forEach(b => { b.onclick = () => pick(b.dataset.cal); });
+}
+function hideCal() { $('#calPopup').style.display = 'none'; calAnchor = null; calPick = null; }
+$('#sDate').onclick = () => $('#calPopup').style.display === 'none' ? showCal($('#sDate')) : hideCal();
+$('#pDate').onclick = () => $('#calPopup').style.display === 'none' ? showCal($('#pDate')) : hideCal();
+$('#btnYdayS').onclick = () => setDate(fmtRu(yesterday()));
+$('#btnYdayP').onclick = () => setDate(fmtRu(yesterday()));
+document.addEventListener('click', ev => {
+  if (calAnchor && !ev.target.closest('#calPopup') && ev.target !== calAnchor) hideCal();
+});
+// маска ввода ДД.ММ.ГГГГ
+function maskDateInput(input) {
+  input.addEventListener('input', () => {
+    const d = input.value.replace(/\D/g, '').slice(0, 8);
+    let out = d.slice(0, 2);
+    if (d.length > 2) out += '.' + d.slice(2, 4);
+    if (d.length > 4) out += '.' + d.slice(4, 8);
+    input.value = out;
+  });
+}
+maskDateInput($('#msHired'));
+$('#msHired').onclick = ev => {
+  ev.stopPropagation();
+  $('#calPopup').style.display === 'none'
+    ? showCal($('#msHired'), ds => { $('#msHired').value = ds; })
+    : hideCal();
+};
+
+// ---------- вкладки ----------
+function switchTab(name) {
+  const btn = document.querySelector('nav button[data-tab="' + name + '"]');
+  if (btn) btn.click();
+}
+document.querySelectorAll('nav button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('main > section').forEach(s =>
+      s.style.display = s.id === 'tab-' + b.dataset.tab ? '' : 'none');
+    if (b.dataset.tab === 'checks') loadDups();
+  };
+});
+
+// ---------- 🧪 Проверка: дубли ----------
+const DUP_KINDS = { employees: 'Шаблон', stats: 'Статистика', staff: 'Стаж' };
+function loadDups() {
+  dups = findDuplicates(db);
+  renderChecks();
+}
+function renderChecks() {
+  const box = $('#checksList');
+  const inc = incompleteStaff();
+  $('#checksCount').textContent = 'групп дублей: ' + dups.length + ' · неполных записей «Стаж»: ' + inc.length;
+  const n = dups.length + inc.length;
+  $('#navChecks').textContent = n ? '🧪 Проверка (' + n + ')' : '🧪 Проверка';
+  $('#navChecks').classList.toggle('alert', dups.length > 0);
+  if (!dups.length && !inc.length) {
+    box.innerHTML = '<div class="hint" style="margin-top:10px">✓ Дублирующихся и неполных записей не найдено.</div>';
+    return;
+  }
+  let html = '';
+  if (dups.length) html += dupGroupsHtml('dup');
+  if (inc.length) {
+    const noHired = inc.filter(p => badHired(p.hired));
+    const noTab = inc.filter(p => !badHired(p.hired) && !p.tab.trim());
+    const staffRow = p => `
+      <tr data-id="${p.id}">
+        <td class="num" style="color:var(--muted)">${p.id}</td>
+        <td contenteditable="true" data-k="fio">${esc(p.fio)}</td>
+        <td contenteditable="true" data-k="tab">${esc(p.tab)}</td>
+        <td contenteditable="true" data-k="hired">${esc(p.hired)}</td>
+        <td style="color:#c0392b">${esc(missingList(p))}</td>
+        <td><button class="btn danger mini" data-del-chk-staff="${p.id}">✕</button></td>
+      </tr>`;
+    const staffTable = rows => `
+      <table id="chkStaffTable">
+        <thead>
+          <tr><th>id</th><th>ФИО</th><th>Табномер</th><th>Дата приёма</th><th>Чего не хватает</th><th></th></tr>
+        </thead>
+        <tbody>${rows.map(staffRow).join('')}</tbody>
+      </table>`;
+    if (noHired.length) {
+      html += `
+    <details style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-top:14px">
+      <summary style="font-weight:600; cursor:pointer">Стаж — нет даты приёма (${noHired.length})</summary>
+      <div class="hint" style="margin:8px 0">Без даты приёма стаж не посчитать, но сотрудник остаётся штатным. Допишите данные прямо здесь. Дата — ДД.ММ.ГГГГ.</div>
+      ${staffTable(noHired)}
+    </details>`;
+    }
+    if (noTab.length) {
+      html += `
+    <details style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-top:10px">
+      <summary style="font-weight:600; cursor:pointer">Стаж — нет табномера, но дата приёма есть (${noTab.length})</summary>
+      <div class="hint" style="margin:8px 0">Обычно это аутсорс — табномера может и не быть.</div>
+      ${staffTable(noTab)}
+    </details>`;
+    }
+  }
+  box.innerHTML = html;
+}
+function dupGroupsHtml(prefix) {
+  return dups.map((g, gi) => `
+    <div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-top:10px">
+      <div style="font-weight:600; margin-bottom:6px">${DUP_KINDS[g.kind] || g.kind} · «${esc(g.key.replace(/^[tf]:/, ''))}» — ${g.rows.length} записи</div>
+      ${g.rows.map((row, ri) => `
+        <label style="display:flex; gap:8px; align-items:center; padding:3px 0; cursor:pointer">
+          <input type="radio" name="${prefix}${gi}" value="${row.id}" ${ri === g.rows.length - 1 ? 'checked' : ''}>
+          <span><b>${esc(row.fio || '—')}</b> · ${esc(row.num || 'без табномера')} · ${esc(row.extra || '')} <span style="color:var(--muted)">(id ${row.id})</span></span>
+        </label>`).join('')}
+      <button class="btn danger mini" style="margin-top:6px" data-resolve="${gi}">✓ Это верно — удалить остальные</button>
+    </div>`).join('');
+}
+async function applyResolve(gi, prefix) {
+  const g = dups[gi];
+  const checked = document.querySelector('input[name="' + prefix + gi + '"]:checked');
+  if (!checked) return;
+  const keep = +checked.value;
+  const removeIds = g.rows.map(r => r.id).filter(id => id !== keep);
+  const keepRow = g.rows.find(r => r.id === keep);
+  const ok = await dlg('Удаление дублей',
+    (DUP_KINDS[g.kind] || g.kind) + ' · «' + g.key.replace(/^[tf]:/, '') + '»\n\nОставить:\n' +
+    keepRow.fio + ' · ' + keepRow.extra + '\n\nУдалить остальные (' + removeIds.length + ' шт.)?', 'Удалить');
+  if (!ok) return;
+  const removed = resolveDuplicate(db, g.kind, keep, removeIds);
+  persist();
+  dups = findDuplicates(db);
+  renderEmployees(); renderStats(); renderStaff(); renderSolution(); renderChecks();
+  toast('Удалено дублей: ' + removed);
+}
+$('#checksList').onclick = async ev => {
+  const btn = ev.target.closest('[data-resolve]');
+  if (!btn) return;
+  await applyResolve(+btn.dataset.resolve, 'dup');
+};
+$('#btnCheckDups').onclick = () => loadDups();
+
+// модалка разбора дублей внутри «⚡ Авто»
+function dupModalFlow() {
+  return new Promise(resolve => {
+    const m = $('#dupModal');
+    const btnGo = $('#mDupContinue'), btnNo = $('#mDupCancel');
+    const refresh = groups => {
+      const list = $('#dupModalList');
+      if (!groups.length) {
+        list.innerHTML = '<div class="hint" style="margin-top:10px; color:#1a7a3c; font-weight:600">✓ Дубли устранены — можно продолжать.</div>';
+        btnGo.disabled = false;
+      } else {
+        list.innerHTML = dupGroupsHtml('mdup');
+        btnGo.disabled = true;
+      }
+    };
+    refresh(dups);
+    m.classList.add('show');
+    const done = v => {
+      m.classList.remove('show');
+      btnGo.onclick = btnNo.onclick = $('#dupModalList').onclick = null;
+      resolve(v);
+    };
+    btnGo.onclick = () => done(true);
+    btnNo.onclick = () => done(false);
+    $('#dupModalList').onclick = ev => {
+      const btn = ev.target.closest('[data-resolve]');
+      if (!btn) return;
+      applyResolve(+btn.dataset.resolve, 'mdup').then(() => refresh(dups));
+    };
+  });
+}
+
+// неполные записи «Стажа»
+function incompleteStaff() {
+  return db.staff.filter(p => !p.fio.trim() || !p.tab.trim() || badHired(p.hired));
+}
+function badHired(h) {
+  const s = (h || '').trim();
+  return !s || /#N\/A/i.test(s) || !/^\d{2}\.\d{2}\.\d{4}$/.test(s);
+}
+function missingList(p) {
+  const m = [];
+  if (!p.fio.trim()) m.push('ФИО');
+  if (!p.tab.trim()) m.push('табномер');
+  const h = (p.hired || '').trim();
+  if (!h) m.push('дата приёма');
+  else if (/#N\/A/i.test(h)) m.push('дата приёма (#N/A — битая из Excel)');
+  else if (!/^\d{2}\.\d{2}\.\d{4}$/.test(h)) m.push('дата приёма (не ДД.ММ.ГГГГ)');
+  return m.join(', ');
+}
+$('#checksList').addEventListener('input', ev => {
+  const td = ev.target.closest('#chkStaffTable td[contenteditable]');
+  if (!td) return;
+  const id = +td.closest('tr').dataset.id;
+  const p = db.staff.find(x => x.id === id);
+  if (!p) return;
+  p[td.dataset.k] = td.textContent.trim();
+  persist();
+});
+$('#checksList').addEventListener('focusout', ev => {
+  if (ev.target.closest('#chkStaffTable td[contenteditable]')) {
+    renderStaff();
+    renderChecks();
+  }
+});
+$('#checksList').addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-del-chk-staff]');
+  if (!btn) return;
+  const id = +btn.dataset.delChkStaff;
+  const p = db.staff.find(x => x.id === id);
+  const ok = await dlg('Удаление', 'Удалить из справочника: ' + (p ? p.fio : id) + '?', 'Удалить');
+  if (!ok) return;
+  db.staff = db.staff.filter(x => x.id !== id);
+  persist(); renderStaff(); renderEmployees(); renderChecks(); toast('Удалено');
+});
+
+// ---------- поиск ----------
+$('#search').addEventListener('input', renderEmployees);
+$('#searchStaff').addEventListener('input', renderStaff);
+
+// ---------- экспорт / импорт JSON ----------
+function shareOrDownload(blob, filename) {
+  // iOS: сначала «Поделиться» (можно сохранить в Файлы), иначе — скачивание
+  const file = new File([blob], filename, { type: blob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: filename }).catch(() => {});
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function download() {
+  shareOrDownload(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }), 'data.json');
+  toast('Файл data.json подготовлен');
+}
+$('#fileInput').onchange = async ev => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  await withBusy('Импортирую JSON', async () => {
+    try {
+      const parsed = JSON.parse(await f.text());
+      if (!parsed.settings || !Array.isArray(parsed.employees)) throw new Error('неверная структура');
+      db = parsed;
+      persist();
+      render();
+      toast('Данные импортированы');
+    } catch (err) {
+      alert('Ошибка импорта: ' + err.message);
+    }
+  });
+  ev.target.value = '';
+};
+$('#cmdResetData').onclick = async () => {
+  const ok = await dlg('Сброс данных',
+    'Все правки будут УДАЛЕНЫ, вернутся встроенные данные (56 сотрудников, справочник стажа, баллы, статистика).\n\nПродолжить?', 'Сбросить');
+  if (!ok) return;
+  db = JSON.parse(JSON.stringify(window.DEFAULT_DB));
+  localStorage.removeItem(LS_KEY);
+  persist();
+  render();
+  toast('Данные сброшены к встроенным');
+};
+
+// ---------- Баллы: рендер ----------
+function filteredPoints() {
+  const q = $('#searchPoints').value.toLowerCase().trim();
+  return db.points.filter(p =>
+    !q || (p.vals[0] || '').toLowerCase().includes(q) || (p.vals[1] || '').includes(q));
+}
+function renderPoints() {
+  const tb = $('#pointsTable tbody');
+  if (!tb) return;
+  const list = filteredPoints();
+  $('#pointsCount').textContent = 'строк: ' + list.length;
+  tb.innerHTML = list.map(p => `<tr data-id="${p.id}">
+      <td class="num" style="color:var(--muted)">${p.id}</td>
+      ${p.vals.map((v, i) => `<td contenteditable="true" data-i="${i}" class="${i >= 2 ? 'num' : ''}">${esc(v)}</td>`).join('')}
+      <td><button class="btn danger mini" data-del-point="${p.id}">✕</button></td>
+    </tr>`).join('');
+}
+$('#pointsTable').addEventListener('input', ev => {
+  const td = ev.target.closest('td[contenteditable]');
+  if (!td) return;
+  const id = +td.closest('tr').dataset.id;
+  const p = db.points.find(x => x.id === id);
+  if (!p) return;
+  p.vals[+td.dataset.i] = td.textContent.trim();
+  persist();
+});
+$('#pointsTable').addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-del-point]');
+  if (!btn) return;
+  const id = +btn.dataset.delPoint;
+  const ok = await dlg('Удаление', 'Удалить строку справочника «Баллы» №' + id + '?', 'Удалить');
+  if (!ok) return;
+  db.points = db.points.filter(x => x.id !== id);
+  persist(); renderPoints(); toast('Удалено');
+});
+$('#searchPoints').addEventListener('input', renderPoints);
+
+// ---------- Статистика: рендер ----------
+function filteredStats() {
+  const q = $('#searchStats').value.toLowerCase().trim();
+  let list = db.stats.filter(s =>
+    !q || s.fio.toLowerCase().includes(q) || s.num.toLowerCase().includes(q));
+  if (statsSort.k) {
+    const k = statsSort.k;
+    list = [...list].sort((a, b) => {
+      const va = parseFloat(String(a[k]).replace(',', '.')), vb = parseFloat(String(b[k]).replace(',', '.'));
+      if (!isNaN(va) && !isNaN(vb)) return (va - vb) * statsSort.dir;
+      return String(a[k]).localeCompare(String(b[k]), 'ru') * statsSort.dir;
+    });
+  }
+  return list;
+}
+function renderStats() {
+  const tb = $('#statsTable tbody');
+  if (!tb) return;
+  const list = filteredStats();
+  $('#statsCount').textContent = 'строк: ' + list.length;
+  tb.innerHTML = list.map(s => `<tr data-id="${s.id}">
+      <td class="num" style="color:var(--muted)">${s.id}</td>
+      <td contenteditable="true" data-k="num">${esc(s.num)}</td>
+      <td contenteditable="true" data-k="fio">${esc(s.fio)}</td>
+      <td contenteditable="true" data-k="lines" class="num">${esc(s.lines)}</td>
+      <td contenteditable="true" data-k="errors" class="num">${esc(s.errors)}</td>
+      <td><button class="btn danger mini" data-del-stat="${s.id}">✕</button></td>
+    </tr>`).join('');
+}
+$('#statsTable').addEventListener('input', ev => {
+  const td = ev.target.closest('td[contenteditable]');
+  if (!td) return;
+  const id = +td.closest('tr').dataset.id;
+  const s = db.stats.find(x => x.id === id);
+  if (!s) return;
+  s[td.dataset.k] = td.textContent.trim();
+  persist();
+});
+$('#statsTable').addEventListener('focusout', ev => {
+  if (ev.target.closest('td[contenteditable]')) renderStats();
+});
+$('#statsTable').addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-del-stat]');
+  if (!btn) return;
+  const id = +btn.dataset.delStat;
+  const ok = await dlg('Удаление', 'Удалить строку статистики №' + id + '?', 'Удалить');
+  if (!ok) return;
+  db.stats = db.stats.filter(x => x.id !== id);
+  persist(); renderStats(); toast('Удалено');
+});
+$('#searchStats').addEventListener('input', renderStats);
+$('#btnAddStat').onclick = () => {
+  db.stats.push({ id: maxID(db.stats) + 1, num: '', fio: '', lines: '', errors: '' });
+  persist(); renderStats(); toast('Строка добавлена');
+};
+
+// ---------- Решение: рендер ----------
+function renderSolution() {
+  const tb = $('#solutionTable tbody');
+  if (!tb) return;
+  const q = ($('#searchSolution').value || '').toLowerCase().trim();
+  const list = (db.solution || []).filter(s =>
+    !q || s.fio.toLowerCase().includes(q) || s.num.toLowerCase().includes(q));
+  $('#solutionCount').textContent = 'строк: ' + list.length;
+  tb.innerHTML = list.map((s, i) => `<tr>
+      <td class="num" style="color:var(--muted)">${i + 1}</td>
+      <td>${esc(s.num)}</td>
+      <td>${esc(s.fio)}</td>
+      <td class="num">${esc(s.lines)}</td>
+      <td class="num">${esc(s.errors)}</td>
+      <td class="num">${esc(s.total)}</td>
+      <td>${esc(s.hired)}</td>
+      <td>${esc(s.date)}</td>
+      <td class="stazh-cell">${esc(s.stazh)}</td>
+      <td class="match-cell" title="${esc(s.match)}">${esc(s.match)}</td>
+    </tr>`).join('');
+}
+const matchStyle = document.createElement('style');
+matchStyle.textContent = '.match-cell{font-size:11px;color:#6b7280;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}';
+document.head.appendChild(matchStyle);
+$('#searchSolution').addEventListener('input', renderSolution);
+
+function runSolution() {
+  return withBusy('Формирую сведение', async () => {
+    db.solution = buildSolutionRows(db);
+    updateTemplateFromSolution(db);
+    persist();
+    renderSolution();
+    renderEmployees();
+    toast('Сведение сформировано: ' + db.solution.length + ' строк · шаблон пересобран');
+  });
+}
+
+function exportSolutionCsv() {
+  const rows = [['Номер', 'Сотрудник', 'Шт:Стр', 'ШТ:Ошибки', 'Всего баллы', 'Дата приема', 'Дата', 'Стаж работы', 'Сопоставление']];
+  (db.solution || []).forEach(s => rows.push([s.num, s.fio, s.lines, s.errors, s.total, s.hired, s.date, s.stazh, s.match]));
+  const csv = '\uFEFF' + rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  shareOrDownload(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'Решение.csv');
+  toast('CSV подготовлен');
+}
+</script>
+<script>
+'use strict';
+
+// ==================== ЗАГРУЗКА ИЗ EXCEL (порт applyWorkbook/inspectWorkbook) ====================
+function detectSheetKind(name, rows) {
+  switch (String(name || '').toLowerCase().trim()) {
+    case 'баллы': return 'points';
+    case 'статистика': return 'stats';
+    case 'стаж': return 'staff';
+  }
+  const top = rows.slice(0, 6);
+  const has = word => top.some(row => row.some(c => String(cellString(c)).toLowerCase() === word.toLowerCase()));
+  const startsWith = prefix => top.some(row => row.some(c => String(cellString(c)).toLowerCase().startsWith(prefix)));
+  if (has('Этаж')) return 'employees';
+  if (has('Секунды') || has('Итого отбор') || startsWith('пок.')) return 'points';
+  if (has('Номер') && has('Сотрудник')) return 'stats';
+  if (has('Дата приема') || has('Дата приёма')) return 'staff';
+  return '';
+}
+function kindTitle(k) {
+  switch (k) {
+    case 'points': return 'грузится во вкладку «Баллы» — полная замена справочника';
+    case 'stats': return 'грузится во вкладку «Статистика» — полная замена';
+    case 'staff': return 'грузится во вкладку «Стаж» — только новые записи, без дублей';
+    case 'employees': return 'грузится во вкладку «Шаблон» — обновление существующих + добавление новых';
+  }
+  return k;
+}
+function headerPreview(rows) {
+  for (const row of rows) {
+    const cells = row.map(c => String(cellString(c)).trim()).filter(t => t);
+    if (cells.length >= 3) {
+      let s = cells.slice(0, 8).join(' | ');
+      if (s.length > 90) s = s.slice(0, 90) + '…';
+      return s;
+    }
+  }
+  return '';
+}
+function countRows(rows, kind) {
+  let n = 0;
+  const cs = cellString;
+  switch (kind) {
+    case 'points':
+      for (const row of rows) if (row.length && String(cs(row[0])).trim()) n++;
+      break;
+    case 'stats': {
+      let start = false;
+      for (const row of rows) {
+        if (!row.length) continue;
+        if (cs(row[0]) === 'Номер') { start = true; continue; }
+        if (start && cs(row[0]) !== '' && row.length > 1 && cs(row[1]) !== '') n++;
+      }
+      break;
+    }
+    case 'staff': {
+      let start = false;
+      for (const row of rows) {
+        if (!row.length) continue;
+        const v = cs(row[0]);
+        if (v === 'Ф.И.О.') { start = true; continue; }
+        if (start && v !== '') n++;
+      }
+      if (!n) for (const row of rows) if (row.length && cs(row[0]) !== '') n++;
+      break;
+    }
+    case 'employees': {
+      let start = false;
+      for (const row of rows) {
+        if (row.some(c => cs(c) === 'Этаж')) start = true;
+        if (!start) continue;
+        if (row.some(c => { const v = cs(c); return v !== '' && v !== 'Этаж'; })) n++;
+      }
+      break;
+    }
+  }
+  return n;
+}
+// sheetRows — лист -> массив строк «сырых» значений (как GetRows RawCellValue в excelize)
+function sheetRows(wb, name) {
+  const ws = wb.Sheets[name];
+  if (!ws) return [];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+  // обрезать пустые строки в конце
+  while (aoa.length && aoa[aoa.length - 1].every(c => String(c).trim() === '')) aoa.pop();
+  return aoa;
+}
+
+function importPointsRows(rows) {
+  const pts = [];
+  let id = 0;
+  for (const row of rows) {
+    if (!row.length || !String(cellString(row[0])).trim()) continue;
+    const vals = new Array(21).fill('');
+    for (let i = 0; i < 21 && i < row.length; i++) vals[i] = cellString(row[i]);
+    vals[0] = cleanName(vals[0]);
+    id++;
+    pts.push({ id, vals });
+  }
+  if (!pts.length) return 0;
+  db.points = pts;
+  return pts.length;
+}
+function importStatsRows(rows) {
+  const out = [];
+  let id = 0;
+  for (const row of rows) {
+    if (!row.length) continue;
+    const a = cellString(row[0]);
+    const b = row.length > 1 ? cellString(row[1]) : '';
+    if (a === 'Номер' || (!a && !b)) continue;
+    if (!b) continue;
+    const lines = row.length > 2 ? cellString(row[2]) : '';
+    const errs = row.length > 3 ? cellString(row[3]) : '';
+    id++;
+    out.push({ id, num: a, fio: cleanName(b), lines, errors: errs });
+  }
+  if (!out.length) return 0;
+  db.stats = out;
+  return out.length;
+}
+function importStaffRows(rows) {
+  let added = 0, skipped = 0;
+  const out = [];
+  let id = 0;
+  for (const row of rows) {
+    if (!row.length) continue;
+    const fio = cleanName(cellString(row[0]));
+    if (!fio || fio.toLowerCase() === 'ф.и.о.') continue;
+    let tab = row.length > 1 ? cellString(row[1]) : '';
+    let hired = row.length > 2 ? cellString(row[2]) : '';
+    if (hired) {
+      const d = parseRuDate(hired);
+      if (d) hired = fmtRu(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    }
+    id++;
+    out.push({ id, fio, tab, hired });
+  }
+  if (!out.length) return [0, 0];
+  for (const p of out) {
+    let exists = false;
+    const pD = tabDigits(p.tab);
+    for (const st of db.staff) {
+      const stD = tabDigits(st.tab);
+      if (pD && stD && pD === stD) { exists = true; break; }
+      if (fioMatch(st.fio, p.fio)) { exists = true; break; }
+    }
+    if (exists) { skipped++; continue; }
+    p.id = maxID(db.staff) + 1;
+    db.staff.push(p);
+    added++;
+  }
+  return [added, skipped];
+}
+function importEmployeeRows(rows) {
+  let header = -1, shift = 0;
+  for (let ri = 0; ri < rows.length; ri++) {
+    for (let ci = 0; ci < rows[ri].length; ci++) {
+      if (cellString(rows[ri][ci]) === 'Этаж') { header = ri; shift = ci; break; }
+    }
+    if (header >= 0) break;
+  }
+  if (header < 0) return 0;
+  let n = 0;
+  for (const row of rows.slice(header + 1)) {
+    const get = i => (shift + i < row.length ? cellString(row[shift + i]) : '');
+    const tab = get(0), fio = cleanName(get(1));
+    if (!fio) continue;
+    const lines = get(2), errs = get(3), total = get(4);
+    let comment = get(5), stazh = get(6), category = '';
+    switch (stazh.toUpperCase()) {
+      case 'АУТСОРС': case 'НОВЕНЬКИЕ': case 'ОТСТАЮЩИЕ': case 'ПОДРАБОТКА':
+        category = stazh.toUpperCase(); stazh = '';
+    }
+    let found = false;
+    for (const e of db.employees) {
+      const sameTab = tab !== '' && tabDigits(e.tab) !== '' && tabDigits(e.tab) === tabDigits(tab);
+      const sameFio = fioMatch(e.fio, fio);
+      if (sameTab || (tab === '' && sameFio) || (sameFio && sameTab)) {
+        e.tab = tab; e.fio = fio; e.lines = lines; e.errors = errs; e.total = total;
+        e.comment = comment; e.category = category; e.stazh = stazh;
+        found = true; n++;
+        break;
+      }
+    }
+    if (!found) {
+      db.employees.push({ id: maxID(db.employees) + 1, tab, fio, lines, errors: errs, total, comment, category, stazh });
+      n++;
+    }
+  }
+  return n;
+}
+function applyWorkbook(wb, targets) {
+  const report = [];
+  for (const name of wb.SheetNames) {
+    if (!targets[name]) continue;
+    const rows = sheetRows(wb, name);
+    switch (detectSheetKind(name, rows)) {
+      case 'points': {
+        const n = importPointsRows(rows);
+        if (n) report.push('лист «' + name + '» (Баллы): загружено ' + n + ' строк');
+        break;
+      }
+      case 'stats': {
+        const n = importStatsRows(rows);
+        if (n) report.push('лист «' + name + '» (Статистика): загружено ' + n + ' строк');
+        break;
+      }
+      case 'staff': {
+        const [added, skipped] = importStaffRows(rows);
+        if (added || skipped) report.push('лист «' + name + '» (Стаж): добавлено ' + added + ' новых, пропущено существующих ' + skipped);
+        break;
+      }
+      case 'employees': {
+        const n = importEmployeeRows(rows);
+        if (n) report.push('лист «' + name + '» (Шаблон): обновлено/добавлено сотрудников: ' + n);
+        break;
+      }
+    }
+  }
+  if (!report.length) throw new Error('не выбран ни один вид данных, либо в файле их нет');
+  const fixed = fixBadDatesInDB(db);
+  if (fixed) report.push('автоисправлено значений-дат: ' + fixed);
+  const warnings = collectImportWarnings(db);
+  return { report: report.join('; '), warnings };
+}
+
+// ---------- модалка выбора листов ----------
+let sheetModalOnCancel = null;
+let sheetModalValidate = null;
+function showSheetModal(path, sheets, onApply, onCancel, requiredKinds) {
+  sheetModalOnCancel = onCancel || null;
+  sheetModalValidate = requiredKinds || null;
+  $('#sheetFileName').textContent = 'Файл: ' + path.split('/').pop();
+  const list = $('#sheetList');
+  list.innerHTML = sheets.map((s, i) => {
+    const nm = (s.name || '').trim() || ('Лист ' + (i + 1));
+    const KIND_NAMES = { points: 'Баллы', stats: 'Статистика', staff: 'Стаж', employees: 'Шаблон' };
+    const kindName = KIND_NAMES[s.kind] || nm;
+    return `
+    <label style="display:flex;align-items:flex-start;gap:10px;border:1px solid var(--border);border-radius:6px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" data-sheet="${esc(s.name)}" ${s.kind === 'staff' ? '' : 'checked'} style="margin-top:3px;transform:scale(1.3)">
+      <span>
+        <b style="font-size:14px">📄 ${esc(kindName)}</b>${kindName !== nm ? ` <span style="color:var(--muted);font-size:11.5px">(лист «${esc(nm)}»)</span>` : ''}<br>
+        <span style="color:#1a5fb4;font-size:12px">${esc(s.title || '')}</span><br>
+        <span style="color:var(--muted);font-size:11px;user-select:text">колонки: ${esc(s.cols || '—')}</span><br>
+        <span style="color:var(--muted);font-size:11px">строк с данными: ${s.count}</span>
+      </span>
+    </label>`;
+  }).join('');
+  $('#sheetModal').classList.add('show');
+  $('#mLoadSheets').onclick = () => {
+    const targets = {};
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => { if (cb.checked) targets[cb.dataset.sheet] = true; });
+    if (!Object.keys(targets).length) { alert('Отметьте хотя бы один вид данных'); return; }
+    if (sheetModalValidate) {
+      const KIND_NAMES = { points: 'Баллы', stats: 'Статистика', staff: 'Стаж', employees: 'Шаблон' };
+      const kindByName = {};
+      sheets.forEach(s => kindByName[s.name] = s.kind);
+      const sel = new Set(Object.keys(targets).map(n => kindByName[n]));
+      const missing = sheetModalValidate.filter(k => !sel.has(k));
+      if (missing.length) {
+        alert('Для «⚡ Авто» обязательно отметить: ' + missing.map(k => KIND_NAMES[k] || k).join(', ') +
+          '.\nБез них сведение и пересборка будут неполными.');
+        return;
+      }
+    }
+    $('#sheetModal').classList.remove('show');
+    onApply(targets).catch(e => alert('Ошибка загрузки: ' + e.message));
+  };
+}
+$('#mCancelSheets').onclick = () => {
+  $('#sheetModal').classList.remove('show');
+  const cb = sheetModalOnCancel;
+  sheetModalOnCancel = null;
+  if (cb) cb();
+};
+
+async function loadFromExcelP(requiredKinds) {
+  if (typeof XLSX === 'undefined') {
+    alert('Библиотека чтения Excel ещё не загружена.\nПодключитесь к интернету один раз, откройте приложение и подождите пару секунд — потом она будет работать офлайн.');
+    return false;
+  }
+  const f = await pickExcelFile();
+  if (!f) return false;
+  let wb;
+  try {
+    wb = await withBusy('Читаю файл', async () => {
+      const buf = await f.arrayBuffer();
+      return XLSX.read(buf, { type: 'array', cellDates: false });
+    });
+  } catch (e) { alert('Не удалось открыть файл Excel: ' + e.message); return false; }
+  const sheets = [];
+  for (const name of wb.SheetNames) {
+    const rows = sheetRows(wb, name);
+    const kind = detectSheetKind(name, rows);
+    if (!kind) continue;
+    sheets.push({ name, kind, count: countRows(rows, kind), title: kindTitle(kind), cols: headerPreview(rows) });
+  }
+  if (!sheets.length) {
+    alert('В файле не найдено известных данных (листы «Баллы», «Статистика», «Стаж» или форма сотрудников)');
+    return false;
+  }
+  return new Promise(resolve => {
+    showSheetModal(f.name, sheets, async targets => {
+      try {
+        const { report, warnings } = withBusySync('Загружаю данные из Excel', () => applyWorkbook(wb, targets));
+        persist();
+        render();
+        toast('✓ ' + report);
+        if (warnings.length) {
+          await alert('⚠ В загруженных данных найдены подозрительные значения —\nчисла, которые Excel отобразил как даты:\n\n' +
+            warnings.join('\n') + '\n\nПроверьте эти строки и исправьте значения вручную.');
+        }
+        const dupCount = checkDupsAfterLoad(false);
+        if (dupCount && (!requiredKinds || !requiredKinds.auto)) {
+          await dlg('Обнаружены дубли',
+            'В загруженных данных есть дублирующиеся записи: ' + dupCount + ' групп(ы).\n' +
+            'Перейдите во вкладку «🧪 Проверка» — там отметьте верные строки, дубли будут удалены.',
+            'Понятно');
+        }
+        resolve(true);
+      } catch (e) { alert('Ошибка загрузки: ' + e.message); resolve(false); }
+    }, () => resolve(false), requiredKinds);
+  });
+}
+function withBusySync(label, fn) { return fn(); }
+function loadFromExcel() { loadFromExcelP(); }
+
+function checkDupsAfterLoad(notify) {
+  dups = findDuplicates(db);
+  renderChecks();
+  if (dups.length) {
+    $('#navChecks').classList.add('alert');
+    if (notify === 'auto') {
+      dlg('Дубли в файле — ⚡ Авто невозможно',
+        'В загруженном файле есть дублирующиеся записи: ' + dups.length + ' групп(ы).\n\n' +
+        '⚡ Авто остановлено — перейдите во вкладку «🧪 Проверка»,\n' +
+        'отметьте верные строки в каждой группе и повторите «⚡ Авто».',
+        'Понятно');
+    }
+    return dups.length;
+  }
+  $('#navChecks').classList.remove('alert');
+  return 0;
+}
+
+// ---------- выбор файла Excel (input на iOS открывает меню Файлы) ----------
+const xlsxInput = document.createElement('input');
+xlsxInput.type = 'file';
+xlsxInput.accept = '.xlsx,.xlsm,.xls';
+function pickExcelFile() {
+  return new Promise(resolve => {
+    const done = f => { xlsxInput.onchange = null; xlsxInput.value = ''; resolve(f); };
+    xlsxInput.onchange = () => done(xlsxInput.files[0] || null);
+    // событие cancel в iOS Safari
+    xlsxInput.addEventListener('cancel', () => done(null), { once: true });
+    xlsxInput.click();
+  });
+}
+
+// ==================== ОТЧЁТ В EXCEL (порт SaveReport, упрощённый — без заливки) ====================
+async function saveReport() {
+  if (typeof XLSX === 'undefined') {
+    alert('Библиотека Excel ещё не загружена.\nПодключитесь к интернету один раз и подождите пару секунд.');
+    return;
+  }
+  const date = db.settings.date || 'отчет';
+  const aoa = [];
+  aoa.push([]);
+  aoa.push([null, null, 'Норма баллов в час', cellVal(db.settings.normPerHour), db.settings.date]);
+  aoa.push([null, null, 'Часы подбора', cellVal(db.settings.pickingHours)]);
+  aoa.push([null, null, 'Норма баллов в смену', cellVal(db.settings.normPerShift)]);
+  aoa.push([null, 'Этаж', 'Сотрудник', 'Строчки', 'Ошибки', 'Всего баллы', 'Коментарии', 'Стаж работы']);
+  const emps = [...db.employees].sort((a, b) => numVal(b.total) - numVal(a.total));
+  for (const e of emps) {
+    let stazhVal = stazhFromStaff(db, e);
+    if (!stazhVal && !staffContains(db, e)) stazhVal = 'АУТСОРС';
+    else if (!stazhVal) stazhVal = e.stazh;
+    aoa.push([null, e.tab, e.fio, cellVal(e.lines), cellVal(e.errors), cellVal(e.total), e.comment, stazhVal]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 2 }, { wch: 16 }, { wch: 36 }, { wch: 12 }, { wch: 9 }, { wch: 14 }, { wch: 16 }, { wch: 15 }];
+  const wb = XLSX.utils.book_new();
+  let sheet = date;
+  XLSX.utils.book_append_sheet(wb, ws, sheet);
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const fname = 'Отчет ' + date + '.xlsx';
+  shareOrDownload(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
+  toast('✓ Отчёт «' + sheet + '» (' + db.employees.length + ' сотрудников) — сохраните файл через меню');
+}
+function cellVal(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return '';
+  const v = parseFloat(t.replace(',', '.'));
+  return isNaN(v) ? t : v;
+}
+
+// ==================== КНОПКИ «Программы» ====================
+$('#cmdImport').onclick = () => loadFromExcel();
+$('#cmdSolution').onclick = () => runSolution();
+$('#cmdAuto').onclick = () => runAuto();
+async function runAuto() {
+  const ok = await dlg('⚡ Авто',
+    'Полный цикл одной кнопкой:\n' +
+    '1. выберете файл Excel и листы для загрузки;\n' +
+    '2. пересоберу «Решение» и шаблон с нуля.\n\nПродолжить?',
+    'Продолжить');
+  if (!ok) return;
+  const imported = await loadFromExcelP(['points', 'stats']);
+  if (!imported) { toast('⚡ Авто остановлено — данные не загружены'); return; }
+  const dupCount = await checkDupsAfterLoad(false);
+  if (dupCount) {
+    switchTab('checks');
+    const cont = await dupModalFlow();
+    if (!cont) { toast('⚡ Авто остановлено — дубли не разобраны'); return; }
+  }
+  await withBusy('Авто: сведение → шаблон', async () => {
+    try {
+      db.solution = buildSolutionRows(db);
+      updateTemplateFromSolution(db);
+      persist();
+      renderSolution();
+      renderEmployees();
+      toast('⚡ Готово: сведение ' + db.solution.length + ' строк · шаблон пересобран');
+    } catch (e) { alert('Ошибка: ' + e.message); }
+  });
+}
+$('#cmdRefreshTpl').onclick = () => $('#btnRefreshTpl').click();
+$('#btnRefreshTpl').onclick = async () => {
+  const ok = await dlg('Пересборка шаблона',
+    'Шаблон будет УДАЛЁН и пересобран заново:\n' +
+    '• «Решение» пересчитается из текущих «Статистики», «Баллов» и «Стажа»;\n' +
+    '• дубли источника схлопнутся (останется строка с баллами);\n' +
+    '• Комментарии, Категория и Стаж сотрудников перенесутся.\n\nПродолжить?',
+    'Пересобрать');
+  if (!ok) return;
+  await withBusy('Пересобираю шаблон', async () => {
+    try {
+      db.solution = buildSolutionRows(db);
+      const [rebuilt, from] = rebuildTemplate(db);
+      const dupsEmp = duplicateEmployees(db);
+      persist();
+      renderEmployees();
+      const recolor = await dlg('Окраска шаблона',
+        'Шаблон пересобран: строк — ' + rebuilt + '.\n\nПерекрасить все строки по авто-правилам?\n(ручные категории сбросятся на «— авто —»)',
+        'Окрасить по авто');
+      let recolored = 0;
+      if (recolor) {
+        db.employees.forEach(e => { if (e.category) { e.category = ''; recolored++; } });
+        persist();
+        renderEmployees();
+      }
+      let msg = '✓ Шаблон пересобран ' + (from || '') + ': строк — ' + rebuilt +
+        (recolor ? ', окрашено по авто' : '');
+      if (dupsEmp.length) msg += '\n\n⚠ Дубли сотрудников:\n' + dupsEmp.join('\n');
+      toast(msg);
+    } catch (e) { alert('Ошибка: ' + e.message); }
+  });
+};
+$('#btnRecolor').onclick = async () => {
+  const manual = db.employees.filter(e => e.category).length;
+  if (!manual) { toast('Ручных категорий нет — всё уже окрашено по авто'); return; }
+  const ok = await dlg('Окраска по авто',
+    'Сбросить ручные категории (' + manual + ' шт.)?\nЦвет строк станет по авто-правилам: нет в «Стаже» — аутсорс, стаж < 3 мес — новенькие, баллы < нормы — отстающие.',
+    'Окрасить');
+  if (!ok) return;
+  await withBusy('Окрашиваю по авто', async () => {
+    let n = 0;
+    db.employees.forEach(e => { if (e.category) { e.category = ''; n++; } });
+    persist();
+    renderEmployees();
+    toast('Сброшено ручных категорий: ' + n);
+  });
+};
+$('#btnSaveReport').onclick = () => withBusy('Готовлю отчёт', () => saveReport());
+$('#cmdReport').onclick = () => $('#btnSaveReport').click();
+$('#cmdAddEmp').onclick = () => $('#btnAddEmp').click();
+$('#cmdExportJson').onclick = () => download();
+$('#cmdImportJson').onclick = () => $('#fileInput').click();
+$('#cmdExportCsv').onclick = () => exportSolutionCsv();
+
+// ==================== СТАРТ ====================
+// при каждом запуске — дата по умолчанию = вчера (как в настольной версии)
+db.settings.date = fmtRu(yesterday());
+persist();
+render();
+
+// регистрация service worker — офлайн-режим (работает только по https или localhost)
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

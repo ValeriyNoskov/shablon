@@ -1,0 +1,16 @@
+{
+  "name": "Шаблон выгрузки",
+  "short_name": "Шаблон",
+  "description": "Автономная версия настольной программы «Шаблон выгрузки»: сотрудники, баллы, статистика, сведение, стаж",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6f9",
+  "theme_color": "#2158a8",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
