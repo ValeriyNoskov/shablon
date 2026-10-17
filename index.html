@@ -2681,14 +2681,26 @@ function companyKeywords(company) {
   if (!v) return [];
   return String(v).split(/[,;]+/).map(s => s.trim()).filter(Boolean);
 }
+// слово из правила найдено в имени? — целым словом, а для длинных слов (≥4 букв)
+// и как часть слова («Мезонин» найдёт «Подбор Мезонин-2»);
+// короткие (напр. «ПРО») — только целым словом, чтобы не цеплять «ПРОФСЕРВИС»
+function kwWordFound(s, w) {
+  if (s.includes(' ' + w + ' ')) return true;
+  return w.length >= 4 && s.includes(w);
+}
 function companyMatch(name, company) {
   const pad = t => ' ' + String(t ?? '').toUpperCase().replace(/_/g, ' ').replace(/Ё/g, 'Е').replace(/\s+/g, ' ').trim() + ' ';
   const s = pad(name), k = pad(company);
   if (s === '  ' || k === '  ') return false;
   if (s.trim().startsWith('НОВЕНЬКИЙ')) return k.trim() === 'ПРОФСЕРВИС';
   if (s.includes(k)) return true;
-  // правила из настроек: «ПРОФСЕРВИС = Подбор мез» (по подстроке, без учёта регистра)
-  return companyKeywords(company).some(kw => s.includes(pad(kw).trim()));
+  // правила из настроек: «ПРОФСЕРВИС = Стажёр Мезонин, Подбор мез».
+  // Фраза срабатывает, если ВСЕ её слова есть в имени — даже не подряд
+  // («Стажёр 1 Мезонин» ловится фразой «Стажёр Мезонин»)
+  return companyKeywords(company).some(kw => {
+    const words = pad(kw).trim().split(' ').filter(Boolean);
+    return words.length > 0 && words.every(w => kwWordFound(s, w));
+  });
 }
 
 async function saveReport() {
@@ -2963,7 +2975,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.3';
+const APP_VERSION = '3.4';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
