@@ -1725,7 +1725,13 @@ document.querySelectorAll('nav button').forEach(b => {
     document.querySelectorAll('main > section').forEach(s =>
       s.style.display = s.id === 'tab-' + b.dataset.tab ? '' : 'none');
     if (b.dataset.tab === 'checks') loadDups();
-    if (b.dataset.tab === 'errors') loadErrors();
+    if (b.dataset.tab === 'errors') {
+      loadErrors();
+      // пользователь посмотрел ошибки — запоминаем и снимаем мигание
+      seenErrorsSig = lastErrorsSig;
+      try { localStorage.setItem('shablon-errseen-v1', seenErrorsSig); } catch (e) {}
+      $('#navErrors').classList.remove('alert');
+    }
     closeNav();
     window.scrollTo(0, 0);
   };
@@ -1792,11 +1798,19 @@ function buildErrors() {
   }
   return out;
 }
+// просмотренные ошибки: сигнатура списка сохраняется — вкладка мигает,
+// только пока ошибки новые; после открытия вкладки мигание снимается
+let seenErrorsSig = '';
+try { seenErrorsSig = localStorage.getItem('shablon-errseen-v1') || ''; } catch (e) {}
+let lastErrorsSig = '';
 function loadErrors() {
   const errs = buildErrors();
+  lastErrorsSig = JSON.stringify(errs);
   $('#errCount').textContent = 'проблемных сотрудников: ' + errs.length + ' из ' + db.stats.length;
   $('#navErrors').textContent = errs.length ? '⚠ Ошибки (' + errs.length + ')' : '⚠ Ошибки';
-  $('#navErrors').classList.toggle('alert', errs.length > 0);
+  // мигает только пока ошибки НОВЫЕ (не просмотренные);
+  // после открытия вкладки мигание снимается до появления новых данных
+  $('#navErrors').classList.toggle('alert', errs.length > 0 && lastErrorsSig !== seenErrorsSig);
   const box = $('#errorsList');
   if (!errs.length) {
     box.innerHTML = '<div class="hint" style="margin-top:10px">✓ Проблем сопоставления не найдено — все сотрудники из «Статистики» разобраны.</div>';
@@ -2861,7 +2875,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.7';
+const APP_VERSION = '2.8';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
