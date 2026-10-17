@@ -2530,17 +2530,23 @@ async function saveReport() {
   const wb = XLSX.utils.book_new();
   let sheet = date;
   XLSX.utils.book_append_sheet(wb, makeSheet(emps), sheet);
-  // отдельные листы по компаниям (как в VBA — книги «Баллы (компания).xlsx»,
-  // на телефоне удобнее листы в том же файле): строки только этой компании
-  let compSheets = 0;
+  // отдельные КНИГИ по компаниям — как в VBA («Баллы (компания).xlsx»):
+  // строки только этой компании, внутри лист с датой отчёта
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const outFiles = [{
+    name: 'Отчет ' + date + '.xlsx',
+    blob: new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: XLSX_TYPE }),
+  }];
   for (const comp of REPORT_COMPANIES) {
     const rows = emps.filter(e => companyMatch(e.fio, comp));
     if (!rows.length) continue;
-    XLSX.utils.book_append_sheet(wb, makeSheet(rows), comp);
-    compSheets++;
+    const wbC = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wbC, makeSheet(rows), sheet);
+    outFiles.push({
+      name: 'Баллы (' + comp + ').xlsx',
+      blob: new Blob([XLSX.write(wbC, { bookType: 'xlsx', type: 'array' })], { type: XLSX_TYPE }),
+    });
   }
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const fname = 'Отчет ' + date + '.xlsx';
   // подсказка для iOS: файл выдаётся через меню «Поделиться» — нужно выбрать «Сохранить в Файлы»
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -2552,9 +2558,19 @@ async function saveReport() {
     if (!go) return;
     localStorage.setItem(HINT_KEY, '1');
   }
-  shareOrDownload(new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
-  toast('✓ Отчёт «' + sheet + '» (' + db.employees.length + ' сотрудников)' +
-    (compSheets ? '\n+ листы компаний: ' + compSheets : '') + ' — сохраните файл через меню');
+  shareOrDownloadMany(outFiles);
+  toast('✓ Файлов: ' + outFiles.length + ' (отчёт + компании) — сохраните все через меню');
+}
+// отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
+// «Сохранить в Файлы» сохранит их все разом
+function shareOrDownloadMany(list) {
+  const files = list.map(f => new File([f.blob], f.name, { type: f.blob.type }));
+  if (navigator.canShare && navigator.canShare({ files })) {
+    navigator.share({ files, title: files[0].name }).catch(() => {});
+    return;
+  }
+  // запасной путь (старый iOS/ПК) — по одному
+  for (const f of list) shareOrDownload(f.blob, f.name);
 }
 function cellVal(s) {
   const t = String(s ?? '').trim();
