@@ -420,7 +420,7 @@
     </div>
     <div class="panel">
       <h2>Компании для книг отчёта</h2>
-      <div id="setCompaniesChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px"></div>
+      <div id="setCompaniesChips" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px"></div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
         <input id="newCompany" type="text" placeholder="Новая компания" style="flex:1; min-width:140px; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px">
         <button class="btn" id="cmdAddCompany">➕ Добавить</button>
@@ -1405,17 +1405,20 @@ function renderCompaniesChips() {
   if (!box) return;
   box.innerHTML = '';
   companiesList().forEach(c => {
+    // одна строка = одна компания: плитка слева (фикс. ширина — поля ровные),
+    // поле слов отбора справа
     const row = document.createElement('div');
-    row.style.cssText = 'margin-bottom:10px';
+    row.style.cssText = 'display:grid; grid-template-columns:132px 1fr; gap:8px; align-items:stretch';
     const chip = document.createElement('span');
-    chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;background:#eef3f8;border:1px solid var(--border);border-radius:16px;padding:6px 7px 6px 13px;font-size:14px;font-weight:700';
+    chip.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:6px;background:#eef3f8;border:1px solid var(--border);border-radius:16px;padding:5px 6px 5px 12px;font-size:13px;font-weight:700;overflow:hidden';
     const txt = document.createElement('span');
     txt.textContent = c;
+    txt.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
     chip.appendChild(txt);
     const x = document.createElement('button');
     x.textContent = '✕';
     x.title = 'Удалить компанию';
-    x.style.cssText = 'border:none;background:#dde5ee;border-radius:50%;width:22px;height:22px;font-size:12px;line-height:1;color:#667;padding:0;cursor:pointer';
+    x.style.cssText = 'flex:none;border:none;background:#dde5ee;border-radius:50%;width:22px;height:22px;font-size:12px;line-height:1;color:#667;padding:0;cursor:pointer';
     x.onclick = async () => {
       const rest = companiesList().filter(k => k !== c);
       const ok = await dlg('Удалить компанию',
@@ -1433,17 +1436,12 @@ function renderCompaniesChips() {
     row.appendChild(chip);
     // правило отбора: «ПРОФСЕРВИС = Подбор мез» — слова/фразы через запятую,
     // по которым сотрудники попадают в книгу этой компании
-    const line = document.createElement('div');
-    line.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px';
-    const eq = document.createElement('span');
-    eq.textContent = '=';
-    eq.style.cssText = 'font-weight:700;color:#567;font-size:14px';
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.inputMode = 'text';
     inp.value = companyKeywords(c).join(', ');
-    inp.placeholder = 'слова отбора через запятую, напр. Подбор мез';
-    inp.style.cssText = 'flex:1;min-width:120px;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px';
+    inp.placeholder = 'слова отбора, напр. Подбор мез';
+    inp.style.cssText = 'box-sizing:border-box;border:1px solid var(--border);border-radius:16px;padding:6px 12px;font-size:13px;min-width:0';
     inp.onchange = () => {
       db.settings.companyRules = db.settings.companyRules || {};
       const v = inp.value.trim();
@@ -1452,9 +1450,7 @@ function renderCompaniesChips() {
       persist();
       toast(c + ' = ' + (v || '(без слов отбора)'));
     };
-    line.appendChild(eq);
-    line.appendChild(inp);
-    row.appendChild(line);
+    row.appendChild(inp);
     box.appendChild(row);
   });
 }
@@ -2967,7 +2963,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.2';
+const APP_VERSION = '3.3';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
