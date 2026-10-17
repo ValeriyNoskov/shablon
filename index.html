@@ -2748,7 +2748,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
@@ -2790,7 +2790,7 @@ async function checkForUpdate() {
 setTimeout(checkForUpdate, 2500);
 
 // ==================== МАСШТАБ ТАБЛИЦ ====================
-// кнопки −/＋ над каждой таблицей: размер шрифта 50–220%, запоминается по вкладке
+// кнопки −/＋ и щипок двумя пальцами: размер 50–220%, запоминается по вкладке
 const ZKEY = 'shablon-zoom-v1';
 let zooms = {};
 try { zooms = JSON.parse(localStorage.getItem(ZKEY) || '{}'); } catch (e) { zooms = {}; }
@@ -2801,23 +2801,36 @@ document.querySelectorAll('main .table-wrap').forEach((wrap, i) => {
   bar.innerHTML = '<button type="button" data-d="-1" aria-label="Уменьшить">−</button>' +
     '<span class="zval"></span>' +
     '<button type="button" data-d="1" aria-label="Увеличить">＋</button>' +
-    '<span class="zlbl">масштаб таблицы</span>';
+    '<span class="zlbl">масштаб · щипок двумя пальцами</span>';
   wrap.before(bar);
-  const apply = () => {
-    const z = zooms[sec] ?? 100;
+  const getZ = () => zooms[sec] ?? 100;
+  const setZ = z => {
+    z = Math.min(220, Math.max(50, Math.round(z / 5) * 5));
+    zooms[sec] = z;
+    localStorage.setItem(ZKEY, JSON.stringify(zooms));
     wrap.style.setProperty('--tbl-zoom', z / 100);
     bar.querySelector('.zval').textContent = z + '%';
   };
   bar.querySelectorAll('button').forEach(b => {
-    b.onclick = () => {
-      let z = zooms[sec] ?? 100;
-      z = Math.min(220, Math.max(50, z + (+b.dataset.d) * 15));
-      zooms[sec] = z;
-      localStorage.setItem(ZKEY, JSON.stringify(zooms));
-      apply();
-    };
+    b.onclick = () => setZ(getZ() + (+b.dataset.d) * 15);
   });
-  apply();
+  setZ(getZ());
+  // щипок двумя пальцами на самой таблице
+  let startDist = 0, startZ = 100;
+  const tdist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      startDist = tdist(e.touches);
+      startZ = getZ();
+    }
+  }, { passive: true });
+  wrap.addEventListener('touchmove', e => {
+    if (e.touches.length !== 2 || !startDist) return;
+    e.preventDefault(); // не даём странице прокручиваться во время щипка
+    setZ(startZ * tdist(e.touches) / startDist);
+  }, { passive: false });
+  wrap.addEventListener('touchend', () => { startDist = 0; });
+  wrap.addEventListener('touchcancel', () => { startDist = 0; });
 });
 
 // ==================== СТАРТ ====================
