@@ -1954,17 +1954,18 @@ $('#searchStaff').addEventListener('input', renderStaff);
 
 // ---------- экспорт / импорт JSON ----------
 function shareOrDownload(blob, filename) {
-  // iOS: сначала «Поделиться» (можно сохранить в Файлы), иначе — скачивание
+  // iOS: сначала «Поделиться» (можно сохранить в Файлы), иначе — скачивание.
+  // Возвращает Promise, чтобы можно было отправлять файлы строго по очереди
   const file = new File([blob], filename, { type: blob.type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: filename }).catch(() => {});
-    return;
+    return navigator.share({ files: [file], title: filename }).catch(() => {});
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return Promise.resolve();
 }
 function download() {
   shareOrDownload(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }), 'data.json');
@@ -2697,16 +2698,34 @@ async function saveReport() {
       ? '\n⚠ ни у кого нет компании в имени — заново загрузите Excel'
       : '') + '\nВ меню выберите «Сохранить в Файлы»');
 }
-// отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
-// «Сохранить в Файлы» сохранит их все разом
-function shareOrDownloadMany(list) {
+// отправить несколько файлов. iOS при мультиотправке иногда теряет часть
+// файлов — поэтому после отправки проверяем и при необходимости
+// сохраняем по одному, с пошаговыми подсказками
+async function shareOrDownloadMany(list) {
   const files = list.map(f => new File([f.blob], f.name, { type: f.blob.type }));
   if (navigator.canShare && navigator.canShare({ files })) {
-    navigator.share({ files, title: files[0].name }).catch(() => {});
-    return;
+    try {
+      await navigator.share({ files, title: files[0].name });
+      const ok = await dlg('Проверьте файлы',
+        'Вы сохранили ' + list.length + ' файл(ов):\n\n' + list.map(f => '• ' + f.name).join('\n') +
+        '\n\nВсе ли оказались в папке «Файлы»?',
+        'Да, все на месте');
+      if (ok) return;
+    } catch (e) {
+      return; // пользователь сам закрыл меню — не мешаем
+    }
   }
-  // запасной путь (старый iOS/ПК) — по одному
-  for (const f of list) shareOrDownload(f.blob, f.name);
+  // запасной путь: по одному, с подсказкой перед каждым
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (i > 0) {
+      const go = await dlg('Файл ' + (i + 1) + ' из ' + list.length,
+        'Теперь: «' + f.name + '»\n\nСнова выберите «Сохранить в Файлы».',
+        'Сохранить');
+      if (!go) return;
+    }
+    await shareOrDownload(f.blob, f.name);
+  }
 }
 function cellVal(s) {
   const t = String(s ?? '').trim();
@@ -2806,7 +2825,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
