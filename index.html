@@ -2288,12 +2288,22 @@ function checkDupsAfterLoad(notify) {
 const xlsxInput = document.createElement('input');
 xlsxInput.type = 'file';
 xlsxInput.accept = '.xlsx,.xlsm,.xls';
+// ВАЖНО: на iOS Safari click() по не добавленному в документ input НЕ открывает
+// выбор файла — держим элемент в DOM (скрытым)
+xlsxInput.style.display = 'none';
+document.body.appendChild(xlsxInput);
 function pickExcelFile() {
   return new Promise(resolve => {
-    const done = f => { xlsxInput.onchange = null; xlsxInput.value = ''; resolve(f); };
-    xlsxInput.onchange = () => done(xlsxInput.files[0] || null);
-    // событие cancel в iOS Safari
-    xlsxInput.addEventListener('cancel', () => done(null), { once: true });
+    let done = false;
+    const finish = f => {
+      if (done) return;
+      done = true;
+      xlsxInput.onchange = null;
+      xlsxInput.value = '';
+      resolve(f);
+    };
+    xlsxInput.onchange = () => finish(xlsxInput.files[0] || null);
+    xlsxInput.addEventListener('cancel', () => finish(null), { once: true });
     xlsxInput.click();
   });
 }
