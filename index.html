@@ -2537,8 +2537,8 @@ async function saveReport() {
   const thin = { style: 'thin', color: { argb: 'FFB0B8C0' } };
   const borderAll = { top: thin, left: thin, bottom: thin, right: thin };
 
-  const addSheet = name => {
-    const ws = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 5 }] });
+  const addSheet = (book, name) => {
+    const ws = book.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 5 }] });
     ws.getColumn(1).width = 2;
     ws.getColumn(2).width = 16;   // Этаж
     ws.getColumn(3).width = 38;   // Сотрудник
@@ -2614,40 +2614,48 @@ async function saveReport() {
     }
   };
 
-  const wb = new ExcelJS.Workbook();
-  const wsMain = addSheet(date);
-  fillParams(wsMain);
-  fillLegend(wsMain);
-  fillRows(wsMain, emps);
-  // листы по компаниям — как в VBA, но в ТОМ ЖЕ файле:
-  // строки только этой компании, «Новенький N» → только ПРОФСЕРВИС
+  // отдельные КНИГИ (как в VBA): «Отчет дата.xlsx» + «Баллы (компания).xlsx»
+  const makeBook = (list, sheetName) => {
+    const book = new ExcelJS.Workbook();
+    const ws = addSheet(book, sheetName);
+    fillParams(ws);
+    fillLegend(ws);
+    fillRows(ws, list);
+    return book;
+  };
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const outFiles = [{
+    name: 'Отчет ' + date + '.xlsx',
+    blob: new Blob([await makeBook(emps, date).xlsx.writeBuffer()], { type: XLSX_TYPE }),
+  }];
+  // книги по компаниям: строки только этой компании,
+  // «Новенький N» → только ПРОФСЕРВИС; нет строк — книга не создаётся
   for (const comp of REPORT_COMPANIES) {
     const rows = emps.filter(e => companyMatch(e.fio, comp));
     if (!rows.length) continue;
-    const wsC = addSheet(comp);
-    fillParams(wsC);
-    fillRows(wsC, rows);
+    outFiles.push({
+      name: 'Баллы (' + comp + ').xlsx',
+      blob: new Blob([await makeBook(rows, date).xlsx.writeBuffer()], { type: XLSX_TYPE }),
+    });
   }
-  const buf = await wb.xlsx.writeBuffer();
-  const fname = 'Отчет ' + date + '.xlsx';
   // подсказка для iOS: файл выдаётся через меню «Поделиться» — нужно выбрать «Сохранить в Файлы»
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const HINT_KEY = 'shablon-hint-share-v1';
   if (isIOS && !localStorage.getItem(HINT_KEY)) {
     const go = await dlg('Как сохранить файл',
-      'Сейчас откроется меню «Поделиться».\n\nВыберите в нём «Сохранить в Файлы» —\nфайл появится в приложении «Файлы» (синяя папка).\n\nВажно: не выбирайте «Добавить в закладки» —\nсохранится ссылка, а не файл.',
+      'Сейчас откроется меню «Поделиться».\n\nВыберите в нём «Сохранить в Файлы» —\nвсе файлы сохранятся сразу.\n\nВажно: не выбирайте «Добавить в закладки» —\nсохранится ссылка, а не файл.',
       'Открыть меню');
     if (!go) return;
     localStorage.setItem(HINT_KEY, '1');
   }
-  shareOrDownload(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname);
+  shareOrDownloadMany(outFiles);
   const compCount = REPORT_COMPANIES.reduce((n, c) => n + emps.filter(e => companyMatch(e.fio, c)).length, 0);
-  const compSheets = REPORT_COMPANIES.filter(c => emps.some(e => companyMatch(e.fio, c))).length;
-  toast('✓ Отчёт «' + date + '»: ' + emps.length + ' сотрудников' +
-    (compSheets
-      ? '\n+ листы компаний: ' + compSheets + ' (' + compCount + ' сотр.) — сохраните через меню'
-      : '\n⚠ листы компаний не созданы: в именах нет компаний.\nЗаново загрузите Excel («⚡ Авто» или «📥 Загрузить из Excel»)'));
+  const compBooks = outFiles.length - 1;
+  toast('✓ Файлов: ' + outFiles.length + ' — Отчет + ' + compBooks + ' компаний (' + compCount + ' сотр.)\nВ меню выберите «Сохранить в Файлы» — сохранятся все сразу' +
+    (compBooks === 0
+      ? '\n⚠ компании не найдены: в именах нет компаний.\nЗаново загрузите Excel («⚡ Авто» или «📥 Загрузить из Excel»)'
+      : ''));
 }
 // отправить сразу НЕСКОЛЬКО файлов в одно меню «Поделиться»:
 // «Сохранить в Файлы» сохранит их все разом
@@ -2753,7 +2761,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '1.9';
+const APP_VERSION = '2.0';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
