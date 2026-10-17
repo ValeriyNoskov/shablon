@@ -2493,12 +2493,16 @@ function staffWords(s) {
   return new Set(normalizeFIO(s.fio).split(' ').filter(Boolean));
 }
 function sameStaffPerson(a, b) {
+  const ka = normalizeFIO(a.fio), kb = normalizeFIO(b.fio);
+  if (!ka || !kb) return false;
+  // полное совпадение имени — тот же человек, даже если номер (URTN) другой
+  // (при повторных выгрузках людям присваивают новый номер)
+  if (ka === kb) return true;
   const ta = tabDigits(a.tab), tb = tabDigits(b.tab);
-  if (ta && tb) return ta === tb;
-  const wa = staffWords(a), wb = staffWords(b);
-  if (!wa.size || !wb.size) return false;
+  if (ta && tb) return ta === tb;                // разные имена + разные номера — разные люди
+  const wa = new Set(ka.split(' ')), wb = new Set(kb.split(' '));
   const sub = (x, y) => [...x].every(w => y.has(w));
-  return sub(wa, wb) || sub(wb, wa);
+  return sub(wa, wb) || sub(wb, wa);             // «Кузнецова» = «Кузнецова Яна»
 }
 function betterStaff(a, b) {
   const ta = tabDigits(a.tab) ? 1 : 0, tb = tabDigits(b.tab) ? 1 : 0;
@@ -3133,7 +3137,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.9';
+const APP_VERSION = '4.0';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
