@@ -872,7 +872,8 @@ function normalizeFIO(s) {
   let t = String(s ?? '').toLowerCase().trim();
   t = t.replace(/[caeopxykmtbh30]/g, ch => LATIN_CYR[ch] || ch);
   for (const j of SUBSTR_JUNK) t = t.split(j).join(' ');
-  t = t.replace(/[ё_.,\-]/g, ' ');
+  // «ё» = «е» (Стажёр/Стажер, Семён/Семен — одна учётка); прочие разделители — в пробел
+  t = t.replace(/ё/g, 'е').replace(/[_.,\-]/g, ' ');
   return t.split(/\s+/).filter(w => w && !KEY_STOP.has(w)).join(' ');
 }
 
@@ -2966,7 +2967,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.1';
+const APP_VERSION = '3.2';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
