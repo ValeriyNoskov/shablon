@@ -2449,7 +2449,10 @@ function importStatsRows(rows) {
   return out.length;
 }
 function importStaffRows(rows) {
-  // как в VBA (ДополнитьЛист): до последней непустой строки столбца A
+  // как в VBA (ДополнитьЛист): до последней непустой строки столбца A.
+  // ПЕРЕД дополнением чистим справочник от накопленных дублей
+  // (старые версии могли записать одного человека дважды — «Стажёр»/«Стажер»)
+  const removedDups = dedupeStaff();
   rows = cutAtLastNonEmptyColA(rows);
   let added = 0, skipped = 0;
   const out = [];
@@ -2467,21 +2470,55 @@ function importStaffRows(rows) {
     id++;
     out.push({ id, fio, tab, hired });
   }
-  if (!out.length) return [0, 0];
+  if (!out.length) return [0, removedDups];
   for (const p of out) {
     let exists = false;
     const pD = tabDigits(p.tab);
     for (const st of db.staff) {
       const stD = tabDigits(st.tab);
       if (pD && stD && pD === stD) { exists = true; break; }
-      if (fioMatch(st.fio, p.fio)) { exists = true; break; }
+      if (sameStaffPerson(st, p)) { exists = true; break; }
     }
     if (exists) { skipped++; continue; }
     p.id = maxID(db.staff) + 1;
     db.staff.push(p);
     added++;
   }
-  return [added, skipped];
+  return [added, skipped + removedDups];
+}
+// тот же человек в справочнике стажа? — по табномеру ИЛИ по словам имени:
+// слова одной записи целиком входят в другую («Кузнецова» = «Кузнецова Яна»,
+// «Стажер 1» = «Стажёр 1» — регистр и «ё» не важны)
+function staffWords(s) {
+  return new Set(normalizeFIO(s.fio).split(' ').filter(Boolean));
+}
+function sameStaffPerson(a, b) {
+  const ta = tabDigits(a.tab), tb = tabDigits(b.tab);
+  if (ta && tb) return ta === tb;
+  const wa = staffWords(a), wb = staffWords(b);
+  if (!wa.size || !wb.size) return false;
+  const sub = (x, y) => [...x].every(w => y.has(w));
+  return sub(wa, wb) || sub(wb, wa);
+}
+function betterStaff(a, b) {
+  const ta = tabDigits(a.tab) ? 1 : 0, tb = tabDigits(b.tab) ? 1 : 0;
+  if (ta !== tb) return ta > tb ? a : b;
+  return b.fio.length > a.fio.length ? b : a;
+}
+function dedupeStaff() {
+  const keep = [];
+  let removed = 0;
+  for (const st of db.staff) {
+    const idx = keep.findIndex(k => sameStaffPerson(k, st));
+    if (idx < 0) keep.push(st);
+    else {
+      const b = betterStaff(keep[idx], st);
+      if (b !== keep[idx]) keep[idx] = b;
+      removed++;
+    }
+  }
+  if (removed) db.staff = keep;
+  return removed;
 }
 function importEmployeeRows(rows) {
   let header = -1, shift = 0;
@@ -2539,7 +2576,7 @@ function applyWorkbook(wb, targets) {
       }
       case 'staff': {
         const [added, skipped] = importStaffRows(rows);
-        if (added || skipped) report.push('лист «' + name + '» (Стаж): добавлено ' + added + ' новых, пропущено существующих ' + skipped);
+        if (added || skipped) report.push('лист «' + name + '» (Стаж): добавлено ' + added + ' новых, убрано дублей/пропущено ' + skipped);
         break;
       }
       case 'employees': {
@@ -3096,7 +3133,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '3.8';
+const APP_VERSION = '3.9';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
