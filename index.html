@@ -415,6 +415,15 @@
       <div class="hint">Норма в смену считается сама (норма в час × часы). Дата влияет на расчёт стажа и авто-категории.</div>
     </div>
     <div class="panel">
+      <h2>Компании для книг отчёта</h2>
+      <input id="setCompanies" type="text" placeholder="ПРОФСЕРВИС, РЕСУРС, ПРО, Энисервис" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:6px; padding:9px 10px; font-size:14px">
+      <div class="hint">
+        Через запятую — как в листе «Настройки» в Excel-версии (столбец F).
+        По этим словам ищутся сотрудники для отдельных книг «Баллы (компания).xlsx».
+        Совпадение по ЦЕЛЫМ словам: «ПРО» не цепляет «ПРОФСЕРВИС».
+      </div>
+    </div>
+    <div class="panel">
       <h2>Данные</h2>
       <div class="toolbar">
         <button class="btn" id="cmdExportJson" title="Сохранить данные в файл">📤 Экспорт JSON</button>
@@ -1360,6 +1369,7 @@ function renderSettings() {
   $('#pHours').value = db.settings.pickingHours;
   $('#pNormShift').value = db.settings.normPerShift;
   $('#pDate').value = db.settings.date;
+  $('#setCompanies').value = companiesList().join(', ');
 }
 
 // синхронные копии полей «Программа» ↔ «Шаблон»
@@ -1373,6 +1383,21 @@ function bindTwin(sel, key) {
   });
 }
 [['#pNormHour', 'normPerHour'], ['#pHours', 'pickingHours'], ['#pDate', 'date']].forEach(([sel, key]) => bindTwin(sel, key));
+
+// список компаний для книг отчёта («⚙ Настройка»)
+$('#setCompanies').addEventListener('change', () => {
+  const list = $('#setCompanies').value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+  if (list.length) {
+    db.settings.companies = list;
+    persist();
+    toast('Компании: ' + list.join(', '));
+  } else {
+    delete db.settings.companies;
+    persist();
+    $('#setCompanies').value = companiesList().join(', ');
+    toast('Компании: по умолчанию (' + companiesList().join(', ') + ')');
+  }
+});
 
 function filteredEmployees() {
   const q = $('#search').value.toLowerCase().trim();
@@ -2509,8 +2534,13 @@ function pickExcelFile() {
 
 // ==================== ОТЧЁТ В EXCEL (порт SaveReport, упрощённый — без заливки) ====================
 // ==================== ОТЧЁТ: КОМПАНИИ ====================
-// компании для отдельных листов отчёта — как в VBA (лист «Настройки», столбец F)
-const REPORT_COMPANIES = ['ПРОФСЕРВИС', 'РЕСУРС', 'ПРО', 'Энисервис'];
+// список по умолчанию — как в VBA (лист «Настройки», столбец F);
+// редактируется в «⚙ Настройка» → «Компании для книг отчёта»
+const DEFAULT_COMPANIES = ['ПРОФСЕРВИС', 'РЕСУРС', 'ПРО', 'Энисервис'];
+function companiesList() {
+  const c = db.settings && db.settings.companies;
+  return Array.isArray(c) && c.length ? c.filter(x => String(x).trim()) : DEFAULT_COMPANIES;
+}
 // компания совпадает с именем? — по ЦЕЛЫМ словам:
 // «ПРО» находит «Иванов Иван ПРО», но НЕ «Тарасюк Дарья ПРОФСЕРВИС».
 // Учётки «Новенький N …» — только ПРОФСЕРВИС и никакая другая
@@ -2631,13 +2661,14 @@ async function saveReport() {
     return book;
   };
   const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const COMPANIES = companiesList();
   const outFiles = [{
     name: 'Отчет ' + date + '.xlsx',
     blob: new Blob([await makeBook(emps, date).xlsx.writeBuffer()], { type: XLSX_TYPE }),
   }];
   // книги по компаниям: строки только этой компании,
   // «Новенький N» → только ПРОФСЕРВИС; нет строк — книга не создаётся
-  for (const comp of REPORT_COMPANIES) {
+  for (const comp of COMPANIES) {
     const rows = emps.filter(e => companyMatch(e.fio, comp));
     if (!rows.length) continue;
     outFiles.push({
@@ -2657,9 +2688,9 @@ async function saveReport() {
     localStorage.setItem(HINT_KEY, '1');
   }
   shareOrDownloadMany(outFiles);
-  const compCount = REPORT_COMPANIES.reduce((n, c) => n + emps.filter(e => companyMatch(e.fio, c)).length, 0);
+  const compCount = COMPANIES.reduce((n, c) => n + emps.filter(e => companyMatch(e.fio, c)).length, 0);
   const compBooks = outFiles.length - 1;
-  const breakdown = REPORT_COMPANIES
+  const breakdown = COMPANIES
     .map(c => c + ' ' + emps.filter(e => companyMatch(e.fio, c)).length).join(' · ');
   toast('✓ Файлов: ' + outFiles.length + ' (Отчет + компании)\n' + breakdown +
     (compBooks === 0
@@ -2775,7 +2806,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.3';
+const APP_VERSION = '2.4';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
