@@ -2703,6 +2703,11 @@ async function runAuto() {
       renderEmployees();
       loadErrors();
       toast('⚡ Готово: сведение ' + db.solution.length + ' строк · шаблон пересобран');
+      // сразу предложить сохранить отчёт (Отчет + книги компаний)
+      const save = await dlg('⚡ Авто завершено',
+        'Сведение и шаблон готовы.\n\nСформировать и сохранить отчёт —\nфайл «Отчет» + книги компаний?',
+        '💾 Сохранить отчёт');
+      if (save) await saveReport();
     } catch (e) { alert('Ошибка: ' + e.message); }
   });
 }
@@ -2761,7 +2766,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
