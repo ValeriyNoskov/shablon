@@ -24,7 +24,7 @@
 3. Загрузите в него **все файлы из этой папки** (Add file → Upload files).
 4. Settings → Pages → Source: `main` → Save.
 5. Через 1–2 минуты сайт будет доступен по адресу
-   `https://ВАШ_НИК.github.io/shablon/`
+   `https://ValeriyNoskov.github.io/shablon/`
 
 Альтернатива без git: Netlify Drop (app.netlify.com/drop) — перетащить папку, нужен аккаунт.
 
