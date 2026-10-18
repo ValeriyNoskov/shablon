@@ -456,6 +456,15 @@
       </div>
     </div>
     <div class="panel">
+      <h2>💻 Настольные версии</h2>
+      <div class="toolbar">
+        <a class="btn primary" style="text-decoration:none" href="https://github.com/ValeriyNoskov/shablon/releases/latest/download/Shablon-v4.1-mac.zip">⬇️ Для MacBook</a>
+        <a class="btn primary" style="text-decoration:none" href="https://github.com/ValeriyNoskov/shablon/releases/latest/download/Shablon-v4.1-win.zip">⬇️ Для Windows</a>
+        <a class="btn" style="text-decoration:none" href="https://github.com/ValeriyNoskov/shablon/releases" target="_blank" rel="noopener">Все версии</a>
+      </div>
+      <div class="hint">Mac: после распаковки — правый клик по приложению → «Открыть» (один раз). Windows: SmartScreen → «Подробнее» → «Выполнить в любом случае». Инструкция внутри архива.</div>
+    </div>
+    <div class="panel">
       <h2>О приложении</h2>
       <div class="hint" style="display:flex; align-items:center; gap:8px">
         <span>«Шаблон выгрузки» для iPhone/iPad — работает офлайн.</span>
@@ -3152,7 +3161,7 @@ $('#cmdImportJson').onclick = () => $('#fileInput').click();
 $('#cmdExportCsv').onclick = () => exportSolutionCsv();
 
 // ==================== ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ====================
-const APP_VERSION = '4.1';
+const APP_VERSION = '4.2';
 $('#appVersion').textContent = 'версия: ' + APP_VERSION;
 $('#appVerHeader').textContent = 'v' + APP_VERSION;
 function updateAppFlow() {
